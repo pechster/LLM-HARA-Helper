@@ -16,7 +16,7 @@ def run_chat(model: str, messages: list, **kwargs):
 
 def improve_prompt(prompt: str) -> str:
     messages = [
-        {"role": "system", "content": "Rewrite the following prompt for clarity, conciseness, and high-quality HARA analysis."},
+        {"role": "system", "content": "Rewrite the following prompt for clarity, conciseness, and high-quality HARA (Hazard Analysis and Risk Assessment) analysis of a robot arm operating alongside humans. Ensure the output enables thorough, actionable, and standards-compliant analysis."},
         {"role": "user", "content": prompt}
     ]
     return run_chat("openai:gpt-4o-mini", messages)
@@ -25,7 +25,7 @@ def improve_prompt(prompt: str) -> str:
 def get_model_responses(prompt: str, model_list: list) -> dict:
     replies = {}
     messages = [
-        {"role": "system", "content": "You are a precise step by step HARA analyser" },
+        {"role": "system", "content": "You are a HARA (Hazard Analysis and Risk Assessment) expert. Provide a systematic, step-by-step analysis for the scenario described, referencing relevant industry standards where appropriate. Clearly identify hazards, estimate risks, and propose mitigation strategies for each identified risk." },
         {"role": "user", "content": prompt}
     ]
     for model in model_list:
@@ -39,11 +39,11 @@ def critique_and_refine(answer: str, iterations: int = 3, model: str = "openai:g
     current = answer
     for _ in range(iterations):
         critique = run_chat(model, [
-            {"role": "system", "content": "You are a strict critique for the report of HARA analysis. Point out possible improvements and errors."},
+            {"role": "system", "content": "You are a critical reviewer of HARA analysis reports. Assess the provided analysis for completeness, clarity, and technical accuracy. Identify missing hazards, overlooked risks, or vague recommendations, and suggest concrete improvements to the analysis structure and content."},
             {"role": "user", "content": current}
         ])
         improved = run_chat(model, [
-            {"role": "system", "content": "Make the following HARA analysis better, after addressing this critique:"},
+            {"role": "system", "content": "Refine the following HARA analysis based on the provided critique. Address all identified shortcomings, enhance clarity and completeness, and align with industry best practices and standards where possible."},
             {"role": "user", "content": f"Analysis:\n{current}\n\nCritique:\n{critique}"}
         ])
         current = improved
@@ -64,7 +64,7 @@ for model, reply in responses.items():
 
 
 comparison = run_chat("openai:gpt-4o-mini", [
-    {"role": "system", "content": "You are an expert HARA analyst. Compare and critique the following model analyses. Rank them with pros/cons and provide a final improved, unified answer."},
+    {"role": "system", "content": "As an expert in HARA (Hazard Analysis and Risk Assessment), compare and critique the following model-generated analyses. Evaluate each for completeness, clarity, accuracy, and practicality of recommendations. Provide a ranked list with pros and cons for each, and synthesize an improved, unified analysis that incorporates the best elements from all responses."},
     {"role": "user", "content": "\n\n".join([f"{m}:\n{a}" for m, a in responses.items()])}
 ])
 print("\nModel Comparison and improved Answer:\n", comparison)
