@@ -7,224 +7,208 @@ from typing import List, Dict, Any
 _ = load_dotenv()
 client = ai.Client()
 
-# Global dictionary to store the chain of thought/results
-hara_data = {
-    "system": "",
-    "persons": [],
-    "hazards": [],
-    "harms_analysis": [], 
-    "physical_analysis": [], 
-    "actuation_analysis": [], 
-    "scenarios": ""
-}
+# --- Helper Functions ---
 
-def run_chat(messages: list, model: str = "openai:gpt-4o-mini", expected_format="text"):
-    """
-    Helper to run chat and handle JSON parsing if required.
-    Now accepts 'model' dynamically.
-    """
-    # We pass the model parameter here dynamically
-    response = client.chat.completions.create(model=model, messages=messages)
-    content = response.choices[0].message.content
-    
-    if expected_format == "json":
-        clean_content = content.replace("```json", "").replace("```", "").strip()
-        try:
-            return json.loads(clean_content)
-        except json.JSONDecodeError:
-            print(f"Warning: Could not parse JSON from {model}. Raw content: {clean_content[:50]}...")
-            return []
-    return content
+def clean_json_string(content: str) -> str:
+    """Removes markdown formatting to ensure clean JSON parsing."""
+    return content.replace("```json", "").replace("```", "").strip()
 
-# --- Step 1: Extract System ---
-
-def extract_system(user_prompt: str, model: str):
-    print(f"--- Step 1: Extracting System ({model}) ---")
-    messages = [
-        {"role": "system", "content": "You are a HARA expert. Extract the technical system description."},
-        {"role": "user", "content": f"User Prompt: {user_prompt}\n\nExtract the system description conciseley."}
-    ]
-    hara_data["system"] = run_chat(messages, model=model)
-    print(f"System: {hara_data['system']}\n")
-
-# --- Step 2: Identify Persons at Risk ---
-
-def identify_persons(model: str):
-    print(f"--- Step 2: Identifying Persons at Risk ({model}) ---")
-    messages = [
-        {"role": "system", "content": "Identify potential persons at risk. Output a JSON list of strings."},
-        {"role": "user", "content": f"System: {hara_data['system']}\n\nReturn a JSON list of persons at risk (e.g. ['Operator', 'Bystander'])."}
-    ]
-    hara_data["persons"] = run_chat(messages, model=model, expected_format="json")
-    print(f"Persons: {hara_data['persons']}\n")
-
-# --- Step 3: Hazards & Loop for Harms ---
-
-def analyze_hazards_and_harms(model: str):
-    print(f"--- Step 3: Hazards & Harm Loop ({model}) ---")
-    
-    # Extract Hazards first
-    messages = [
-        {"role": "system", "content": "Identify potential hazards. Output a JSON list of strings."},
-        {"role": "user", "content": f"System: {hara_data['system']}\n\nReturn a JSON list of hazards (e.g. ['Mechanical shearing', 'Electrical shock'])."}
-    ]
-    hara_data["hazards"] = run_chat(messages, model=model, expected_format="json")
-    print(f"Hazards Identified: {hara_data['hazards']}")
-    
-    # Analyze Harms for each Person + Hazard
-    results = []
-    if not hara_data["persons"] or not hara_data["hazards"]:
-        print("Skipping harm loop due to missing persons or hazards.")
-        return
-
-    for person in hara_data["persons"]:
-        for hazard in hara_data["hazards"]:
-            msg = [
-                {"role": "system", "content": "You are a risk analyst. Determine the specific harm."},
-                {"role": "user", "content": f"System: {hara_data['system']}\nPerson: {person}\nHazard: {hazard}\n\nWhat specific harm (injury type/severity) could be caused to this person by this hazard? If none, return 'None'. Keep it concise."}
-            ]
-            harm = run_chat(msg, model=model)
-            
-            if "None" not in harm and "none" not in harm:
-                entry = {"person": person, "hazard": hazard, "harm": harm}
-                results.append(entry)
-                print(f"  -> {person} + {hazard} = {harm}")
-    
-    hara_data["harms_analysis"] = results
-    print("")
-
-# --- Step 4: Physical Attributes & Impact Class ---
-
-def analyze_physical_impact(model: str):
-    print(f"--- Step 4: Physical Values & Impact Classes ({model}) ---")
-    
-    # Extract System Parameters first
-    msg_params = [
-        {"role": "system", "content": "Extract system physical attributes and impact classes. Output JSON."},
-        {"role": "user", "content": f"System: {hara_data['system']}\n\nIdentify:\n1. Physical Attributes (e.g., Speed, Force, Temperature)\n2. Impact Classes (e.g., Clamping, Collision, Radiation)\n\nOutput JSON format: {{'attributes': [], 'impact_classes': []}}"}
-    ]
-    params = run_chat(msg_params, model=model, expected_format="json")
-    attributes = params.get("attributes", [])
-    impacts = params.get("impact_classes", [])
-    
-    print(f"Attributes: {attributes}")
-    print(f"Impact Classes: {impacts}")
-    
-    # Loop through each harm
-    unique_harms = list(set([x["harm"] for x in hara_data["harms_analysis"]]))
-    
-    results = []
-    for harm in unique_harms:
-        msg = [
-            {"role": "system", "content": "Link the harm to physical system values. Output JSON."},
-            {"role": "user", "content": f"""
-            System: {hara_data['system']}
-            Harm: {harm}
-            Available Attributes: {attributes}
-            Available Impact Classes: {impacts}
-            
-            Question: By influencing which Physical Value (from list) through which Impact Class (from list) is this harm caused?
-            
-            Return JSON: {{'harm': '{harm}', 'physical_value': '...', 'impact_class': '...'}}
-            """}
-        ]
-        res = run_chat(msg, model=model, expected_format="json")
-        if res:
-            results.append(res)
-            print(f"  -> Harm: {harm[:20]}... caused by {res.get('physical_value')} via {res.get('impact_class')}")
-
-    hara_data["physical_analysis"] = results
-    print("")
-
-# --- Step 5: Actuation Failures ---
-
-def analyze_actuation(model: str):
-    print(f"--- Step 5: Actuation Failures ({model}) ---")
-    
-    # Loop through the results of Step 4
-    results = []
-    for item in hara_data["physical_analysis"]:
-        phy_val = item.get("physical_value")
-        imp_cls = item.get("impact_class")
+def run_chat(messages: list, model: str, expected_format="text"):
+    try:
+        response = client.chat.completions.create(model=model, messages=messages)
+        content = response.choices[0].message.content
         
-        msg = [
-            {"role": "system", "content": "Identify actuator failures. Output JSON."},
-            {"role": "user", "content": f"""
-            System: {hara_data['system']}
-            Problem: A hazardous event involving Physical Value '{phy_val}' and Impact Class '{imp_cls}'.
+        if expected_format == "json":
+            # 1. Strip Markdown (```json ... ```)
+            clean_content = content.replace("```json", "").replace("```", "").strip()
             
-            Question: To which failure would a failure mode of a specific actuator lead to this impact?
-            
-            Return JSON: {{'actuator': '...', 'failure_mode': '...', 'mechanism': '...'}}
-            """}
-        ]
-        res = run_chat(msg, model=model, expected_format="json")
-        if res:
-            res["linked_harm_context"] = item 
-            results.append(res)
-            print(f"  -> Actuator: {res.get('actuator')} failed via {res.get('failure_mode')}")
-            
-    hara_data["actuation_analysis"] = results
-    print("")
+            # 2. Try standard JSON parse
+            try:
+                return json.loads(clean_content)
+            except json.JSONDecodeError:
+                pass # Fall through to backup methods
 
-# --- Step 6: Scenario Refinement ---
+            # 3. Backup: Try parsing as a Python Literal (Handles single quotes: ['A', 'B'])
+            try:
+                # Only safe if content is a list/dict structure
+                return ast.literal_eval(clean_content)
+            except (ValueError, SyntaxError):
+                pass
 
-def generate_scenarios(model: str):
-    print(f"--- Step 6: Scenario Generation ({model}) ---")
+            # 4. Last Resort: Regex to find the first list [...] or object {...}
+            # Sometimes models add text like "Here is the list: [...]"
+            match = re.search(r'(\[.*\]|\{.*\})', clean_content, re.DOTALL)
+            if match:
+                try:
+                    candidate = match.group(1)
+                    # Try JSON again on the extracted part
+                    return json.loads(candidate.replace("'", '"')) # Naive single-to-double quote swap
+                except:
+                    pass
+            
+            print(f"Warning: Parsing failed completely for {model}. Raw: {clean_content[:50]}...")
+            return [] if "list" in str(messages) else {}
+
+        return content
+    except Exception as e:
+        print(f"Error calling model {model}: {e}")
+        return {} if expected_format == "json" else ""
+
+# --- The Core HARA Logic (Encapsulated) ---
+
+def run_single_hara_pass(user_prompt: str, model: str) -> Dict[str, Any]:
+    """
+    Runs the full HARA chain on a SINGLE model and returns the dictionary.
+    """
+    print(f"\n>>> 🤖 STARTING RUN ON MODEL: {model}")
     
-    msg = [
-        {"role": "system", "content": "You are a HARA expert. Generate detailed risk scenarios."},
-        {"role": "user", "content": f"""
-        Based on the following analysis data, play through and generate 3 refined, narrative failure scenarios.
-        
-        System: {hara_data['system']}
-        Persons: {hara_data['persons']}
-        Hazards Identified: {hara_data['hazards']}
-        Actuation Failures Identified: {json.dumps(hara_data['actuation_analysis'])}
-        
-        Format:
-        1. Scenario Title
-        2. Narrative (Description of sequence)
-        3. Consequence
-        """}
-    ]
-    hara_data["scenarios"] = run_chat(msg, model=model)
-    print(hara_data["scenarios"])
-
-# --- Main Execution ---
-
-def run_hara_tool(prompt: str, model: str):
-    """
-    Runs the full HARA chain using the specified model.
-    """
-    # Reset before new run
-    global hara_data
-    hara_data = {
+    # Local storage for this specific run
+    run_data = {
+        "model_used": model,
         "system": "",
         "persons": [],
         "hazards": [],
-        "harms_analysis": [],
-        "physical_analysis": [],
-        "actuation_analysis": [],
-        "scenarios": ""
+        "harms_analysis": [], 
+        "scenarios": [] # Changed to list for JSON consistency
     }
-    
-  
-    print(f"======== STARTING ANALYSIS WITH MODEL: {model} ========")
-   
 
-    extract_system(prompt, model)
-    identify_persons(model)
-    analyze_hazards_and_harms(model)
-    analyze_physical_impact(model)
-    analyze_actuation(model)
-    generate_scenarios(model)
-    
-    return hara_data["scenarios"]
+    # 1. Extract System
+    msg = [
+        {"role": "system", "content": "Extract the technical system description."},
+        {"role": "user", "content": f"User Prompt: {user_prompt}\n\nExtract the system description concisely."}
+    ]
+    run_data["system"] = run_chat(msg, model)
 
-# --- Test ---
-if __name__ == "__main__":
+    # 2. Identify Persons at Risk
+    msg = [
+        {"role": "system", "content": "Identify persons at risk. Output a JSON list of strings."},
+        {"role": "user", "content": f"System: {run_data['system']}\n\nReturn JSON list e.g. ['Operator', 'Bystander']"}
+    ]
+    run_data["persons"] = run_chat(msg, model, expected_format="json")
+
+    # 3. Identify Hazards
+    msg = [
+        {"role": "system", "content": "Identify hazards. Output a JSON list of strings."},
+        {"role": "user", "content": f"System: {run_data['system']}\n\nReturn JSON list e.g. ['Shearing', 'Electrical Shock']"}
+    ]
+    run_data["hazards"] = run_chat(msg, model, expected_format="json")
+
+    # 4. Analyze Harms (Simplified for token efficiency in this demo)
+    # We ask for a batch JSON analysis instead of a loop to save time/cost
+    if run_data["persons"] and run_data["hazards"]:
+        msg = [
+            {"role": "system", "content": "Analyze specific harms. Output a JSON list of objects."},
+            {"role": "user", "content": f"""
+            System: {run_data['system']}
+            Persons: {run_data['persons']}
+            Hazards: {run_data['hazards']}
+            
+            Create a list of risk pairs. 
+            Format: [ {{"person": "...", "hazard": "...", "harm": "...", "severity": "High/Med/Low"}} ]
+            """}
+        ]
+        run_data["harms_analysis"] = run_chat(msg, model, expected_format="json")
+
+    # 5. Scenarios (Strict JSON)
+    msg = [
+        {"role": "system", "content": "Generate 3 refined failure scenarios in JSON."},
+        {"role": "user", "content": f"""
+        Based on:
+        System: {run_data['system']}
+        Harms: {json.dumps(run_data['harms_analysis'])}
+        
+        Return a JSON List of objects:
+        [ {{"title": "...", "narrative": "...", "consequence": "..."}} ]
+        """}
+    ]
+    run_data["scenarios"] = run_chat(msg, model, expected_format="json")
+    
+    print(f"<<< ✅ COMPLETED RUN ON {model}")
+    return run_data
+
+# --- The Consensus Engine ---
+
+def synthesize_consensus(results_list: List[Dict], judge_model: str = "openai:gpt-4o") -> Dict[str, Any]:
+    """
+    Takes N result dictionaries, compares them, and keeps only the findings 
+    that appear in the majority (conceptually) using an LLM Judge.
+    """
+    print(f"\n⚖️  CALCULATING CONSENSUS USING JUDGE: {judge_model}...")
+    
+    # We serialize the results to pass to the judge
+    data_str = json.dumps(results_list, indent=2)
+    
+    system_prompt = """
+    You are a Senior Safety Auditor. Your job is to review HARA (Hazard Analysis) reports from 3 different junior analysts (models).
+    
+    You must generate a FINAL CONSENSUS JSON Report.
+    
+    Rules for Consensus:
+    1. MERGE duplicates: If Analyst A says "Cut" and Analyst B says "Laceration", merge them into one entry "Laceration".
+    2. FILTER outliers: If only one Analyst mentions a bizarre hazard that makes no sense, exclude it. 
+    3. KEEP majority: If a hazard/scenario appears in at least 2 of the 3 reports (semantically), keep it.
+    
+    Return ONLY the valid JSON object matching this structure:
+    {
+        "consensus_system_description": "...",
+        "verified_persons": ["..."],
+        "verified_hazards": ["..."],
+        "verified_harms": [ {"person": "...", "hazard": "...", "harm": "..."} ],
+        "verified_scenarios": [ {"title": "...", "narrative": "..."} ]
+    }
+    """
+    
+    user_prompt = f"""
+    Here are the 3 reports from the analysts:
+    
+    {data_str}
+    
+    Generate the consolidated JSON now.
+    """
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    final_json = run_chat(messages, model=judge_model, expected_format="json")
+    return final_json
+
+# --- Main Execution ---
+
+def main():
+    # The user input
     user_input = "A mobile robot (AGV) transports heavy pallets in a warehouse shared with human workers. It has a lifting fork mechanism."
-    scenarios_openai = run_hara_tool(user_input, model="openai:gpt-4o-mini")
-    # possible to do multiple runs and compare the results
-    # scenarios_anthropic = run_hara_tool(user_input, model="anthropic:claude-3-5-sonnet")
+    
+    # Define your 3 models (Ensure you have keys for these providers)
+    # Example: Using OpenAI for all 3 just for demo, but you should swap these!
+    # models_to_test = ["openai:gpt-4o", "anthropic:claude-3-5-sonnet", "google:gemini-1.5-pro"]
+    
+    # For this specific run, I will use variations or just repeat to demonstrate the logic
+    # In your real environment, change these strings to your actual providers.
+    models_to_test = [
+        "openai:gpt-4o-mini", 
+        "anthropic:claude-sonnet-4-20250514"
+    ]
+
+    results_buffer = []
+
+    # 1. Run Models in Loop
+    for model in models_to_test:
+        result = run_single_hara_pass(user_input, model)
+        results_buffer.append(result)
+
+    # 2. Run Consensus
+    final_data = synthesize_consensus(results_buffer, judge_model="openai:gpt-4o")
+
+    # 3. Output Final JSON
+    print("\n======== 🏆 FINAL CONSENSUS DATA (JSON) ========")
+    print(json.dumps(final_data, indent=2))
+    
+    # Optional: Save to file
+    with open("hara_consensus_result.json", "w") as f:
+        json.dump(final_data, f, indent=2)
+        print("\nSaved to hara_consensus_result.json")
+
+if __name__ == "__main__":
+    main()
