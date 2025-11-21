@@ -57,7 +57,7 @@ original_prompt = "Create a hara analysis for the following: A robot arm that wo
 refined_prompt = improve_prompt(original_prompt)
 print("Refined Prompt:", refined_prompt)
 
-models = ["openai:gpt-4o-mini", "anthropic:claude-3-5-sonnet"]
+models = ["openai:gpt-4o-mini", "anthropic:claude-sonnet-4-20250514"]
 responses = get_model_responses(refined_prompt, models)
 for model, reply in responses.items():
     print(f"\nModel: {model}\n{reply}")
