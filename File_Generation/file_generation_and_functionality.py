@@ -69,6 +69,7 @@ def save_file(hara_data: dict, file_name: str):
     with open(path, "w") as fd:
         json.dump(hara_data, fd)
 
+# Match the field in the JSON file to examine
 def identify_request_target(query_content: str):
     messages = [
         {
@@ -82,6 +83,7 @@ def identify_request_target(query_content: str):
     ]
     return run_chat(messages, "openai:gpt-4o-mini", "json")
 
+# Extract information that is targeted by the user
 def collect_exact_data(query_content: str, field: str):
     if field == "None":
         return {'data': 'None'}
@@ -93,6 +95,7 @@ def collect_exact_data(query_content: str, field: str):
     ]
     return run_chat(messages, "openai:gpt-4o-mini", "json")
 
+# Full replacement function, unfinished
 def complete_query(user_query: dict, file_name: str):
      hara_data = load_file(file_name)
      query_type = query_detection_LLM(user_query, [])
