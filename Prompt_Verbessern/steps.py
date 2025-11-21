@@ -1,13 +1,14 @@
+import re
 import aisuite as ai
 from dotenv import load_dotenv
 import json
 import os
+import ast
 from typing import List, Dict, Any
 
 _ = load_dotenv()
 client = ai.Client()
 
-# --- Helper Functions ---
 
 def clean_json_string(content: str) -> str:
     """Removes markdown formatting to ensure clean JSON parsing."""
@@ -19,30 +20,24 @@ def run_chat(messages: list, model: str, expected_format="text"):
         content = response.choices[0].message.content
         
         if expected_format == "json":
-            # 1. Strip Markdown (```json ... ```)
             clean_content = content.replace("```json", "").replace("```", "").strip()
             
-            # 2. Try standard JSON parse
             try:
                 return json.loads(clean_content)
             except json.JSONDecodeError:
-                pass # Fall through to backup methods
+                pass 
 
-            # 3. Backup: Try parsing as a Python Literal (Handles single quotes: ['A', 'B'])
             try:
-                # Only safe if content is a list/dict structure
                 return ast.literal_eval(clean_content)
             except (ValueError, SyntaxError):
                 pass
 
-            # 4. Last Resort: Regex to find the first list [...] or object {...}
-            # Sometimes models add text like "Here is the list: [...]"
             match = re.search(r'(\[.*\]|\{.*\})', clean_content, re.DOTALL)
             if match:
                 try:
                     candidate = match.group(1)
-                    # Try JSON again on the extracted part
-                    return json.loads(candidate.replace("'", '"')) # Naive single-to-double quote swap
+
+                    return json.loads(candidate.replace("'", '"'))
                 except:
                     pass
             
@@ -54,13 +49,12 @@ def run_chat(messages: list, model: str, expected_format="text"):
         print(f"Error calling model {model}: {e}")
         return {} if expected_format == "json" else ""
 
-# --- The Core HARA Logic (Encapsulated) ---
 
-def run_single_hara_pass(user_prompt: str, model: str) -> Dict[str, Any]:
+def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
     """
     Runs the full HARA chain on a SINGLE model and returns the dictionary.
     """
-    print(f"\n>>> 🤖 STARTING RUN ON MODEL: {model}")
+    print(f"\n>>> ==== STARTING RUN ON MODEL: {model} ====")
     
     # Local storage for this specific run
     run_data = {
@@ -69,7 +63,7 @@ def run_single_hara_pass(user_prompt: str, model: str) -> Dict[str, Any]:
         "persons": [],
         "hazards": [],
         "harms_analysis": [], 
-        "scenarios": [] # Changed to list for JSON consistency
+        "scenarios": []
     }
 
     # 1. Extract System
@@ -93,8 +87,7 @@ def run_single_hara_pass(user_prompt: str, model: str) -> Dict[str, Any]:
     ]
     run_data["hazards"] = run_chat(msg, model, expected_format="json")
 
-    # 4. Analyze Harms (Simplified for token efficiency in this demo)
-    # We ask for a batch JSON analysis instead of a loop to save time/cost
+    # 4. Analyze Harms 
     if run_data["persons"] and run_data["hazards"]:
         msg = [
             {"role": "system", "content": "Analyze specific harms. Output a JSON list of objects."},
@@ -123,19 +116,18 @@ def run_single_hara_pass(user_prompt: str, model: str) -> Dict[str, Any]:
     ]
     run_data["scenarios"] = run_chat(msg, model, expected_format="json")
     
-    print(f"<<< ✅ COMPLETED RUN ON {model}")
+    print(f"<<< ==== COMPLETED RUN ON {model} ====")
     return run_data
 
-# --- The Consensus Engine ---
 
 def synthesize_consensus(results_list: List[Dict], judge_model: str = "openai:gpt-4o") -> Dict[str, Any]:
     """
     Takes N result dictionaries, compares them, and keeps only the findings 
     that appear in the majority (conceptually) using an LLM Judge.
     """
-    print(f"\n⚖️  CALCULATING CONSENSUS USING JUDGE: {judge_model}...")
+    print(f"\n CALCULATING LIKE ANSWERS USING : {judge_model}...")
     
-    # We serialize the results to pass to the judge
+   
     data_str = json.dumps(results_list, indent=2)
     
     system_prompt = """
@@ -177,15 +169,8 @@ def synthesize_consensus(results_list: List[Dict], judge_model: str = "openai:gp
 # --- Main Execution ---
 
 def main():
-    # The user input
     user_input = "A mobile robot (AGV) transports heavy pallets in a warehouse shared with human workers. It has a lifting fork mechanism."
     
-    # Define your 3 models (Ensure you have keys for these providers)
-    # Example: Using OpenAI for all 3 just for demo, but you should swap these!
-    # models_to_test = ["openai:gpt-4o", "anthropic:claude-3-5-sonnet", "google:gemini-1.5-pro"]
-    
-    # For this specific run, I will use variations or just repeat to demonstrate the logic
-    # In your real environment, change these strings to your actual providers.
     models_to_test = [
         "openai:gpt-4o-mini", 
         "anthropic:claude-sonnet-4-20250514"
@@ -193,16 +178,13 @@ def main():
 
     results_buffer = []
 
-    # 1. Run Models in Loop
     for model in models_to_test:
-        result = run_single_hara_pass(user_input, model)
+        result = run_single_hara(user_input, model)
         results_buffer.append(result)
 
-    # 2. Run Consensus
     final_data = synthesize_consensus(results_buffer, judge_model="openai:gpt-4o")
 
-    # 3. Output Final JSON
-    print("\n======== 🏆 FINAL CONSENSUS DATA (JSON) ========")
+    print("\n======== FINAL JSON DATA ========")
     print(json.dumps(final_data, indent=2))
     
     # Optional: Save to file
