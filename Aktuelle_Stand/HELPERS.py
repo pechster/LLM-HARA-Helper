@@ -42,7 +42,7 @@ def run_chat(messages: list, model: str, expected_format="text"):
         print(f"Error calling model {model}: {e}")
         return {} if expected_format == "json" else ""
     
-def run_chat_hara(messages: list, model: str, expected_format: str = "text") -> Any:
+def run_chat_hara(messages: list, model: str, expected_format: str = "text", **kwargs) -> Any:
     try:
         response = client.chat.completions.create(model=model, messages=messages)
         content = response.choices[0].message.content
