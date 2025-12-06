@@ -208,6 +208,7 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
     run_data["scenarios"] = run_chat_hara(msg, model, expected_format="json" , temperature=0)
     for scenario in run_data["scenarios"]:
         print(f"   -> Scenario generated: {scenario['title']}  - {scenario['narrative']}\n")
+        
 
     print(f"<<< ==== COMPLETED RUN ON {model} ====")
     return run_data
