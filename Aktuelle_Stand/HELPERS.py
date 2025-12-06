@@ -3,9 +3,11 @@ import json
 import re
 from dotenv import load_dotenv
 from typing import Any
+import ast
 
 _ = load_dotenv()
 client = ai.Client()
+
 
 def run_chat(messages: list, model: str, expected_format="text"):
     try:
@@ -41,15 +43,16 @@ def run_chat(messages: list, model: str, expected_format="text"):
     except Exception as e:
         print(f"Error calling model {model}: {e}")
         return {} if expected_format == "json" else ""
-    
+
+
 def run_chat_hara(messages: list, model: str, expected_format: str = "text", **kwargs) -> Any:
     try:
         response = client.chat.completions.create(model=model, messages=messages)
         content = response.choices[0].message.content
-        
+
         if expected_format == "json":
             match = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL)
-            
+
             if match:
                 clean_content = match.group(1).strip()
             else:
