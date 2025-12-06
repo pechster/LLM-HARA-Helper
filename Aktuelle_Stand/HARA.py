@@ -37,7 +37,7 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
         {"role": "system", "content": "Extract the technical system description."},
         {"role": "user", "content": f"User Prompt: {user_prompt}\n\nExtract the system description concisely."}
     ]
-    run_data["system"] = run_chat_hara(msg, model)
+    run_data["system"] = run_chat_hara(msg, model, temperature=0)
     print(f"   -> System extracted: {run_data['system']}")
 
     # 2. Identify Persons at Risk
@@ -45,7 +45,7 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
         {"role": "system", "content": "Identify persons at risk. Output a JSON list of strings."},
         {"role": "user", "content": f"System: {run_data['system']}\n\nReturn JSON list of person in PLURAL e.g. ['Operators', 'Bystanders']"}
     ]
-    run_data["persons"] = run_chat_hara(msg, model, expected_format="json")
+    run_data["persons"] = run_chat_hara(msg, model, expected_format="json", temperature=0)
     print(f"   -> Persons identified: {run_data['persons']}")
 
     # 3. Identify Hazards
@@ -65,7 +65,7 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
          Return JSON list of strings.
          """}
     ]
-    run_data["hazards"] = run_chat_hara(msg, model, expected_format="json")
+    run_data["hazards"] = run_chat_hara(msg, model, expected_format="json", temperature=0)
     print(f"   -> Hazards identified: {run_data['hazards']}")
     
     
@@ -121,7 +121,7 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
             """}
         ]
         # Analyze filtered harm queries
-        valid_queries = run_chat_hara(msg_filter, model, expected_format="json")
+        valid_queries = run_chat_hara(msg_filter, model, expected_format="json", temperature=0)
         print(f"   -> Valid harm queries after filtering: {len(valid_queries)}")
 
         if valid_queries:
@@ -148,13 +148,49 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
                 """}
             ]
             
-            run_data["harms_analysis"] = run_chat_hara(msg_analyze, model, expected_format="json")
+            run_data["harms_analysis"] = run_chat_hara(msg_analyze, model, expected_format="json" , temperature=0)
             print(f"   -> Detailed analysis completed for {len(run_data['harms_analysis'])} items.")
-            print(run_data["harms_analysis"])
+            for harm in run_data["harms_analysis"]:
+                print(f"      - {harm['guide_phrase']} => {harm['injury_type']} via {harm['harm_mechanism']} (Severity: {harm['severity']}) \n")
         
         else:
             print("  -> No valid harm scenarios identified after filtering.)")
             run_data["harms_analysis"] = []
+
+        if run_data["harms_analysis"]:
+            print("   -> Running Final Quality Assurance Check...")
+            
+            msg = [
+                {"role": "system", "content": "You are a Lead Safety Engineer performing final Quality Assurance on a HARA report."},
+                {"role": "user", "content": f"""
+                # CONTEXT
+                System: {run_data['system']}
+                
+                # DRAFT REPORT ENTRIES
+                {json.dumps(run_data["harms_analysis"])}
+
+                # YOUR TASK
+                Review each entry for logical consistency and operational realism.
+                
+                # REJECTION CRITERIA (Delete entries that violate these):
+                1. **Role Mismatch:** e.g., 'Supervisors' or 'Bystanders' getting 'Ergonomic injuries' (they don't perform repetitive tasks) or 'Entanglement' (they don't touch parts).
+                2. **Facility vs System:** e.g., 'Slipping on wet floor' is a facility issue, NOT a robot issue, unless the robot leaked the fluid.
+                3. **Improbable Access:** e.g., 'Operator' getting 'Electric Shock' from standard buttons (standard controls are low voltage/insulated).
+                4. **Severity Mismatch:** e.g., 'Noise' causing 'Death'.
+
+                # OUTPUT
+                Return a cleaned JSON list containing ONLY the entries that passed QA. 
+                (You may lightly edit the 'harm_mechanism' to be more precise if needed).
+                """}
+            ]
+            
+            cleaned_harms = run_chat_hara(msg, model, expected_format="json", temperature=0)
+            
+            if cleaned_harms and len(cleaned_harms) > 0:
+                print(f"   -> QA removed {len(run_data['harms_analysis']) - len(cleaned_harms)} low-quality entries.")
+                run_data["harms_analysis"] = cleaned_harms
+            else:
+                print("   -> QA Warning: All entries were rejected (or parsing failed). Keeping original list for review.")
     
 
     # 5. Scenarios (Strict JSON)
@@ -169,8 +205,9 @@ def run_single_hara(user_prompt: str, model: str) -> Dict[str, Any]:
         [ {{"title": "...", "narrative": "...", "consequence": "..."}} ]
         """}
     ]
-    run_data["scenarios"] = run_chat_hara(msg, model, expected_format="json")
-    print(run_data["scenarios"])
+    run_data["scenarios"] = run_chat_hara(msg, model, expected_format="json" , temperature=0)
+    for scenario in run_data["scenarios"]:
+        print(f"   -> Scenario generated: {scenario['title']}  - {scenario['narrative']}\n")
 
     print(f"<<< ==== COMPLETED RUN ON {model} ====")
     return run_data
