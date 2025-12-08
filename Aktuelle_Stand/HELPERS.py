@@ -45,7 +45,7 @@ def run_chat(messages: list, model: str, expected_format="text"):
         return {} if expected_format == "json" else ""
 
 
-def run_chat_hara(messages: list, model: str, expected_format: str = "text", **kwargs) -> Any:
+def run_chat_hara(messages: list, model: str, expected_format: str = "text", output_file:str = None, **kwargs) -> Any:
     try:
         response = client.chat.completions.create(model=model, messages=messages)
         content = response.choices[0].message.content
@@ -67,12 +67,24 @@ def run_chat_hara(messages: list, model: str, expected_format: str = "text", **k
             except json.JSONDecodeError:
                 try:
                     fixed_content = clean_content.replace("'", '"')
-                    return json.loads(fixed_content)
+                    parsed_data = json.loads(fixed_content)
                 except json.JSONDecodeError:
                     print(f"Warning: Parsing failed completely for {model}.")
                     print(f"Raw Content: {clean_content[:100]}...")
                     return [] if "list" in str(messages).lower() else {}
-        return content
+        
+        if output_file:
+            try:
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    if expected_format == "json":
+                        json.dump(parsed_data, f, ensure_ascii=False, indent=4)
+                    else:
+                        f.write(str(parsed_data))
+                print(f"   [Saved output to: {output_file}]")
+            except Exception as e:
+                print(f"   [Error saving file {output_file}: {e}]")
+        return parsed_data
+        
 
     except Exception as e:
         print(f"Error calling model {model}: {e}")
