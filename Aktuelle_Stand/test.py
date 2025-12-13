@@ -247,9 +247,9 @@ def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], persons: List[Dic
             harms_list.append(harm)
     
     harms_list = [str(harm) for harm in harms_list]
-    print(f"Original harms length: {len(cleaned_harms)}")
+    print(f"Original harms length: {len(harms_list)}")
     harms_list = list(set(harms_list))
-    print(f"Removing all length: {len(cleaned_harms)}")
+    print(f"Removing all length: {len(harms_list)}")
 
     transformer = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = transformer.encode(harms_list)
