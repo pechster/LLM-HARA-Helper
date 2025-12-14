@@ -493,7 +493,7 @@ def identify_failure_modes(system:json, model:str="google:gemini-1.5-pro"):
     print(response)
     return response
 
-def actuators(system:json, impact_classes: List[str], model:str="google:gemini-1.5-pro"):
+def define_actuators(system:json, impact_classes: List[str], model:str="google:gemini-1.5-pro"):
     system_prompt = {
         "role": "system",
         "content": f"""
@@ -505,12 +505,12 @@ def actuators(system:json, impact_classes: List[str], model:str="google:gemini-1
 
         RULES:
         1. The extracted actuators must be a specific physical part of the system hardware mechanisms.
-        2. An actuator must be a general name for the component, do not overspecify (e.g. generate "Drone rotor" instead of "Bottom left drone rotor")
-        3. If an actuator is part of a specific component in the machine, then keep the details for it (e.g. "Engine cog wheel" instead of "Cog wheel")
+        2. Add descriptive adjectives only when they bring significant additional information (e.g. generate "Drone rotor" instead of "Bottom left drone rotor").
+        3. If an actuator is part of a specific component in the machine, then keep the details for it (e.g. "Engine cog wheel" instead of "Cog wheel").
         4. Keep the total list of actuators overall unique and don't repeat components.
 
         OUTPUT FORMAT:
-        Return a valid JSON list of dictionaries, where the key is an impact class and the value is a list of all associated actuators, e.g.:
+        Return a valid JSON list of dictionaries, where the key is an impact class (string) and the value is a string of all associated actuators, e.g.:
         - "impact_class" : "Flying Mechanism"
         - "actuators" : "["Propeller rotors", "Electronic speed controllers"]" 
         """}
@@ -524,7 +524,7 @@ def actuators(system:json, impact_classes: List[str], model:str="google:gemini-1
     few_shot_assistant = {
         "role": "assistant",
         "content": """[
-        {'impact_class': 'Moving parts', 'actuators': ['Gripper', 'Elbow joint']},
+        {'impact_class': 'Moving parts', 'actuators': ['Arm Gripper', 'Elbow joint']},
         {'impact_class': 'Heavy loads', 'actuators': []}
         ]
         """
@@ -537,14 +537,73 @@ def actuators(system:json, impact_classes: List[str], model:str="google:gemini-1
             few_shot_assistant,
             {
                 "role": "user",
-                "content": f"Based on the system description: {system}, and the impact classes, generate and associate a comprehensive, but unique, collection of actuators for each impact class."
+                "content": f"Based on the system description: {system}, and the impact classes: {impact_classes}, generate and associate a comprehensive, but unique, collection of actuators for each impact class."
             }],
             model=model,
             expected_format="json",
             temperature=0.5)
+    
     return response
 
+def extract_failure(system:json, failure_mode: Dict[str, Any], actuator_and_impact_class: Dict[str, Any], model:str="google:gemini-1.5-pro"):
+    system_prompt = {
+        "role": "system",
+        "content": """
+        You are an expert in Hazard Analysis and Risk Assessment (HARA).
+        
+        TASK:
+        Analyze the situation given the description of a failure mode, actuator and an impact.
+        Infer the answer to the question: "To which failure would a <<failure mode>> of actuator <<actuator>> lead, causing <<impact>>?"
+        Generte a list of possible failures, while not allowing any redundancy.
+        
+        DEFINITIONS:
+        - Failure mode is a way in which a system component malfunctions.
+        - Actuator is the physical component itself (e.g. "Arm Gripper")
+        - Impact is a hazardous situation, or harm.
 
+        OUTPUT FORMAT:
+        Return only a valid JSON dictionary of the form:
+        {'question': '*the original wording of the question with the replaced variables*'}, 'failures': *[list of all identified failures]*}
+        """
+    }
+    
+    few_shot_user = {
+        "role": "user",
+        "content": """Give me all failures connected to this situation: 
+        - system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}
+        - failure mode:  {'failure_mode': 'Provision Commission', 'description': 'Something is actuated even though it must not at the point in time.'}
+        - actuator and impact: {'actuator': 'Rotors', 'impact': 'drone moving unsafely'}. 
+        """
+    }
+
+    few_shot_assistant = {
+        "role": "assistant",
+        "content": """{
+        'question': 'To which failure would a Provision Comission of actuator Rotors lead, causing the drone moving unsafely?', 
+        'failures': 
+        ['One or more rotors start to / are rotating even though they must not at that point in time', 'One or more rotors start to rotate too late',
+        'One or more rotors stop rotating too late', 'One or more rotors change rotation speed too late']
+        }]
+        """
+    }
+
+    response = run_chat_hara(
+        messages=[
+            system_prompt,
+            few_shot_user,
+            few_shot_assistant,
+            {
+                "role": "user",
+                "content": f"""Define a multitude of unique failures associated with:
+                - failure mode: {failure_mode}
+                - actuator and impact class: {actuator_and_impact_class}
+            """}],
+            model=model,
+            expected_format="json",
+            temperature=0.5)
+    
+    print(response)
+    return response
     
 
 
