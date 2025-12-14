@@ -338,6 +338,7 @@ def extract_iclasses(system:json, model:str="google:gemini-1.5-pro"):
 
         TASK: 
         Based on the provided system description, please extract all the impact class(physical value) of the system. Impact classes would be general operational aspects of the system that could lead to harm, such as "Rotating parts", "Moving parts", "High Voltage", "Chemical exposure", etc.
+        Do not yet consider any interaction with persons or specific harms, only focus on the system itself.
         The given system will include a Name, namely the type of system, and a Description, which outlines its capabilities and limitations. Please only consider the characteristics that are directly relevant to the system's described functionalities and operational context.
 
         OUTPUT FORMAT:
@@ -427,14 +428,13 @@ def define_impact(system:json, impact_class:str, harms: str, model:str="google:g
     return response
 
 
-def impacts(system:json, impact_classes:List[str], harms_dict:Dict[str, Any], model:str="google:gemini-1.5-pro"):
+def impacts(system:json, impact_classes:List[str], harms_summary, model:str="google:gemini-1.5-pro"):
     impacts = {}
     for ic in impact_classes:
         impact_list = []
-        for harms in harms_dict.items():
-            for harm in harms:
-                impact = define_impact(system, ic, harm['harm'], model=model)
-                impact_list.append(impact)
+        for harm in harms_summary:
+            impact = define_impact(system, ic, harm, model=model)
+            impact_list.append(impact)
         impacts[ic] = impact_list  
     return impacts
 
@@ -545,21 +545,21 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
     
     return response
 
-def extract_failure(system:json, failure_mode: Dict[str, Any], actuator_and_impact_class: Dict[str, Any], model:str="google:gemini-1.5-pro"):
+def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, model:str="google:gemini-1.5-pro"):
     system_prompt = {
         "role": "system",
         "content": """
         You are an expert in Hazard Analysis and Risk Assessment (HARA).
         
         TASK:
-        Analyze the situation given the description of a failure mode, actuator and an impact.
+        Analyze the situation given the description of a system, the specified failure mode, actuator and an impact.
         Infer the answer to the question: "To which failure would a <<failure mode>> of actuator <<actuator>> lead, causing <<impact>>?"
         Generte a list of possible failures, while not allowing any redundancy.
         
         DEFINITIONS:
-        - Failure mode is a way in which a system component malfunctions.
+        - Failure modes are a predefined failure model, containing ("Provision Commission", "Provision Ommision", "Value too low", "Value too high", "Value incorrect", "Timing early", "Timing late")
         - Actuator is the physical component itself (e.g. "Arm Gripper")
-        - Impact is a hazardous situation, or harm.
+        - Impact is a hazardous/dangerous situation, or harm.
 
         OUTPUT FORMAT:
         Return only a valid JSON dictionary of the form:
@@ -572,7 +572,8 @@ def extract_failure(system:json, failure_mode: Dict[str, Any], actuator_and_impa
         "content": """Give me all failures connected to this situation: 
         - system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}
         - failure mode:  {'failure_mode': 'Provision Commission', 'description': 'Something is actuated even though it must not at the point in time.'}
-        - actuator and impact: {'actuator': 'Rotors', 'impact': 'drone moving unsafely'}. 
+        - actuator : {'actuator': 'Rotors'}. 
+        - impact: {'impact': 'drone moving unsafely'}
         """
     }
 
@@ -595,8 +596,10 @@ def extract_failure(system:json, failure_mode: Dict[str, Any], actuator_and_impa
             {
                 "role": "user",
                 "content": f"""Define a multitude of unique failures associated with:
+                - system: {system}
                 - failure mode: {failure_mode}
-                - actuator and impact class: {actuator_and_impact_class}
+                - actuator: {actuator}
+                - impact: {impact}
             """}],
             model=model,
             expected_format="json",
@@ -609,16 +612,19 @@ def extract_failure(system:json, failure_mode: Dict[str, Any], actuator_and_impa
 
 if __name__ == "__main__":
     system = extract_system("A mobile robot (AGV) transports heavy pallets in a warehouse shared with human workers. It has a lifting fork mechanism.", model="openai:gpt-4o")
-    persons = extract_persons(system, model="openai:gpt-4o")
-    hazards = extract_hazards(system, model="openai:gpt-4o")
-    harms_dict = harms(system, persons, hazards, model="openai:gpt-4o")
-    harms_summary_list = harms_summary(harms_dict, model="openai:gpt-4o")
+    #persons = extract_persons(system, model="openai:gpt-4o")
+    #hazards = extract_hazards(system, model="openai:gpt-4o")
+    #harms_dict = harms(system, persons, hazards, model="openai:gpt-4o")
+    #harms_summary_list = harms_summary(harms_dict, model="openai:gpt-4o")
     #print(harms_summary_list)
     impact_classes = extract_iclasses(system, model="openai:gpt-4o")
-    impact = define_impact(system, impact_classes[0], "Bystander gets hit by the vehicle.", model="openai:gpt-4o")
-    impacts_dict = impacts(system, impact_classes, harms_dict, model="openai:gpt-4o")
-    print(impacts_dict)
+    #impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-4o")
+    #print(impacts_dict)
+    #print(impacts_dict)
     #failure_modes = identify_failure_modes(system, model="openai:gpt-4o")
+    actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
+    print(actuators)
+    failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
             
         
 
