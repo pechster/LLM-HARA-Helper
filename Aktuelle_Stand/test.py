@@ -493,7 +493,56 @@ def identify_failure_modes(system:json, model:str="google:gemini-1.5-pro"):
     print(response)
     return response
 
+def actuators(system:json, impact_classes: List[str], model:str="google:gemini-1.5-pro"):
+    system_prompt = {
+        "role": "system",
+        "content": f"""
+        You are an expert in Hazard Analysis and Risk Assessment (HARA).
+
+        TASK: 
+        Identify the actuators that directly or indirectly influence the physical values of the system, given a list of impact classes and a system description. Aim to generate a comprehensive series of actuators for each impact class.
+        An actuator is a physical component of the system that when active, has a direct relationship with the impact (e.g. Drone is moving -> actuator is "Rotors").
+
+        RULES:
+        1. The extracted actuators must be a specific physical part of the system hardware mechanisms.
+        2. An actuator must be a general name for the component, do not overspecify (e.g. generate "Drone rotor" instead of "Bottom left drone rotor")
+        3. If an actuator is part of a specific component in the machine, then keep the details for it (e.g. "Engine cog wheel" instead of "Cog wheel")
+        4. Keep the total list of actuators overall unique and don't repeat components.
+
+        OUTPUT FORMAT:
+        Return a valid JSON list of dictionaries, where the key is an impact class and the value is a list of all associated actuators, e.g.:
+        - "impact_class" : "Flying Mechanism"
+        - "actuators" : "["Propeller rotors", "Electronic speed controllers"]" 
+        """}
     
+    few_shot_user = {
+        "role": "user",
+        "content": "Given the system: {'name': 'Robot arm', 'description': 'Loads and offloads packages from a truck.'} \
+        and the impact_classes: ['Moving parts', 'Heavy loads'], identify all unique actuators connected with each impact class."
+    }
+
+    few_shot_assistant = {
+        "role": "assistant",
+        "content": """[
+        {'impact_class': 'Moving parts', 'actuators': ['Gripper', 'Elbow joint']},
+        {'impact_class': 'Heavy loads', 'actuators': ['Gripper', 'Elbow joint']}
+        ]
+        """
+    }
+
+    response = run_chat_hara(
+        messages=[
+            system_prompt,
+            few_shot_user,
+            few_shot_assistant,
+            {
+                "role": "user",
+                "content": f"Based on the system description: {system}, and the impact classes, generate and associate a comprehensive, but unique, collection of actuators for each impact class."
+            }],
+            model=model,
+            expected_format="json",
+            temperature=0.5)
+    return response
 
 
     
@@ -505,10 +554,11 @@ if __name__ == "__main__":
     hazards = extract_hazards(system, model="openai:gpt-4o")
     harms_dict = harms(system, persons, hazards, model="openai:gpt-4o")
     harms_summary_list = harms_summary(harms_dict, model="openai:gpt-4o")
-    print(harms_summary_list)
-    #impact_classes = extract_iclasses(system, model="openai:gpt-4o")
-    #impact = define_impact(system, impact_classes[0], "Bystander gets hit by the vehicle.", model="openai:gpt-4o")
-    #impacts_dict = impacts(system, impact_classes, harms_dict, model="openai:gpt-4o")
+    #print(harms_summary_list)
+    impact_classes = extract_iclasses(system, model="openai:gpt-4o")
+    impact = define_impact(system, impact_classes[0], "Bystander gets hit by the vehicle.", model="openai:gpt-4o")
+    impacts_dict = impacts(system, impact_classes, harms_dict, model="openai:gpt-4o")
+    print(impacts_dict)
     #failure_modes = identify_failure_modes(system, model="openai:gpt-4o")
             
         
