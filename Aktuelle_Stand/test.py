@@ -56,7 +56,7 @@ def extract_system(user_input:str, model:str="google:gemini-1.5-pro"):
             temperature=0.5)
     
 
-    #print(response)
+    print(response)
     return response
 
 
@@ -103,7 +103,7 @@ def extract_persons(system:json, model:str="openai:gpt-4o-mini"):
             expected_format="json",
             temperature=0.5)
     
-    #print(response)
+    print(response)
     return response
 
 
@@ -155,7 +155,7 @@ def extract_hazards(system:json, model:str="google:gemini-1.5-pro"):
             expected_format="json",
             temperature=0.5)
     
-    #print(response)
+    print(response)
     return response
 
 
@@ -207,7 +207,7 @@ def define_harm(system:json, person:str, hazard_class:str, model:str="google:gem
             expected_format="json",
             temperature=0.5)
     
-    #print(response)
+    print(response)
     return response
 
 
