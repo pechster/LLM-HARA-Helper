@@ -8,9 +8,8 @@ from typing import List, Dict, Any
 from HELPERS import *
 from rich.console import Console
 #added semantic embeddings - pip install sentence-transformers scikit-learn
-from sentence_transformers import SentenceTransformer
-from sklearn.cluster import DBSCAN
-from collections import defaultdict
+#from sentence_transformers import SentenceTransformer
+#from sklearn.cluster import DBSCAN
 
 console = Console()
 
@@ -57,7 +56,7 @@ def extract_system(user_input:str, model:str="google:gemini-1.5-pro"):
             temperature=0.5)
     
 
-    print(response)
+    #print(response)
     return response
 
 
@@ -104,7 +103,7 @@ def extract_persons(system:json, model:str="openai:gpt-4o-mini"):
             expected_format="json",
             temperature=0.5)
     
-    print(response)
+    #print(response)
     return response
 
 
@@ -118,7 +117,7 @@ def extract_hazards(system:json, model:str="google:gemini-1.5-pro"):
         Analyze the given system description to identify ALL high-level hazard classes that could potentially arise from its operation, malfunction, or failure.
 
         OUTPUT FORMAT:
-        Retur a single, valid JSON array of strings. Do not include any text before or after the JSON. 
+        Return a single, valid JSON array of strings. Do not include any text before or after the JSON. 
         
         IMPORTANT ABSTRACTION RULES:
         1. **Be Abstract:** The output must use broad, high-level categories (e.g., 'Electrical/Thermal', 'Kinetic') and must NOT use specific failure events (e.g., 'Collision', 'Lifting', 'Falling').
@@ -156,7 +155,7 @@ def extract_hazards(system:json, model:str="google:gemini-1.5-pro"):
             expected_format="json",
             temperature=0.5)
     
-    print(response)
+    #print(response)
     return response
 
 
@@ -208,7 +207,7 @@ def define_harm(system:json, person:str, hazard_class:str, model:str="google:gem
             expected_format="json",
             temperature=0.5)
     
-    print(response)
+    #print(response)
     return response
 
 
@@ -222,55 +221,111 @@ def harms(system:json, persons:List[Dict[str, str]], hazards:List[str], model:st
         harms[p['name']] = harm_caused  
     return harms
 
-def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], persons: List[Dict[str, str]]) -> List[str]:
+def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], model:str="google:gemini-1.5-pro") -> List[str]:
     # Given the harms for many persons, there will be many harms that are the same. Please summarise all harms into a single generalised list without duplicates.
     # You could use a LLM to do this, or go through each json object and extract the harm key, then add it to a set to remove duplicates, and finally convert the set back to a list.
     # However it's tough as there are variations in the way harms are described. So using a LLM might be better.
-    harms_list = []
-    persons_roles = []
-    for p in persons:
-            role = p["name"].lower()
-            split = role.split()
-            if len(split) > 1:
-                persons_roles.append(split[-1])
-            persons_roles.append(role)
-    persons_roles = sorted(persons_roles, key=len, reverse=True)
+    """if 0:
+        harms_list = []
+        persons_roles = []
+        for p in persons:
+                role = p["name"].lower()
+                split = role.split()
+                if len(split) > 1:
+                    persons_roles.append(split[-1])
+                persons_roles.append(role)
+        persons_roles = sorted(persons_roles, key=len, reverse=True)
 
-    regex = r"^(" + "|".join(re.escape(p) for p in persons_roles) + r")\s+"
-    print("Printing harms turned to Person")
+        regex = r"^(" + "|".join(re.escape(p) for p in persons_roles) + r")"
+        print("Printing harms turned to Person")
 
-    for listed in harms_dict.values():
-        for dic in listed:
-            harm = dic["harm"]
-            harm = re.sub(regex, "Person ", harm, flags=re.IGNORECASE)
-            print(harm)
-            harms_list.append(harm)
+        for listed in harms_dict.values():
+            for dic in listed:
+                harm = dic["harm"]
+                harm = re.sub(regex, "Person", harm, flags=re.IGNORECASE)
+                print(harm)
+                harms_list.append(harm)
     
-    harms_list = [str(harm) for harm in harms_list]
-    print(f"Original harms length: {len(harms_list)}")
-    harms_list = list(set(harms_list))
-    print(f"Removing all length: {len(harms_list)}")
+        harms_list = [str(harm) for harm in harms_list]
+        print(f"Original harms length: {len(harms_list)}")
+        harms_list = list(set(harms_list))
+        print(f"Removing all length: {len(harms_list)}")
 
-    transformer = SentenceTransformer("all-MiniLM-L6-v2")
-    embeddings = transformer.encode(harms_list)
-    clusterer = DBSCAN(eps=0.3, min_samples=1, metric="cosine")
-    labels = clusterer.fit_predict(embeddings)
+        transformer = SentenceTransformer("all-MiniLM-L6-v2")
+        embeddings = transformer.encode(harms_list)
+        clusterer = DBSCAN(eps=0.1, min_samples=1, metric="cosine")
+        labels = clusterer.fit_predict(embeddings)
     
-    harms_embeddings = {}
-    for label, harm in zip(labels, harms_list):
-        if label not in harms_embeddings:
-            harms_embeddings[label] = []
-        harms_embeddings[label].append(harm)
+        harms_embeddings = {}
+        for label, harm in zip(labels, harms_list):
+            if label not in harms_embeddings:
+                harms_embeddings[label] = []
+            harms_embeddings[label].append(harm)
     
-    cleaned_harms = []
-    for id, harms in harms_embeddings.items():
-        if id == -1:
-            cleaned_harms.extend(harms)
-        else:
-            cleaned_harms.append(max(harms, key=len))
-    print(f"Final length: {len(cleaned_harms)}") 
+        cleaned_harms = []
+        for id, harms in harms_embeddings.items():
+            if id == -1:
+                cleaned_harms.extend(harms)
+            else:
+                cleaned_harms.append(max(harms, key=len))
+        print(f"Final length: {len(cleaned_harms)}") """
+    harms = []
+    for harms_list in harms_dict.values():
+        for dic in harms_list:
+            harms.append(dic["harm"])
+    
+    print(harms)
+    system_prompt = {
+        "role": "system",
+        "content": f"""
+        You are a diligent thinker and you hate repeating yourself.
 
-    return cleaned_harms
+        TASK:
+        You must review a list of scenarios, endangering the life of a person. 
+        
+        1. Replace all human roles in your answer with the word "Person" 
+        2. Eliminate only scenarios that describe the SAME harm, but paraphrased.
+        3. Do not eliminate scenarios if they have a difference in:
+            - injury mechanism (e.g. struck, crushed, trapped)
+            - source (vehicle moving <-> lifting mechanism <-> electrical)
+            - failure (normal behavior <-> malfunctioning or unintended behavior)
+        4. ALWAYS keep the most information-dense and generalized scenario for each UNIQUE danger. Prioritize longer harms, containing multiple similar injury mechanisms (e.g. keep "stuck or crushed", but not just "struck")
+        5. Single out all semantically unique harms.
+        6. You are allowed to regroup semantically similar concepts or break them into two groups to aid the process, but keep as close to the original wording as possible. You can only group two separate injury mechanisms or sources together in one harm. The end result must be a list of fully semantically unique harms.
+
+        OUTPUT FORMAT:
+        Return only a valid JSON array of strings without any trailing or preceding spaces."""
+    }
+    
+    few_shot_user = {
+        "role": "user",
+        "content": f"{["Safety Officer is struck by moving vehicle.", "Manager gets injured by the vehicle.", "Maintenance Technician gets crushed or trapped by malfunctioning control systems.",
+                       "Warehouse Worker gets crushed or pinched by the lifting fork mechanism.", "Maintenance Technician is knocked over by the vehicle.", "Maintenance Technician receives an electrical shock."]}"
+    }
+
+    few_shot_assistant = {
+        "role": "assistant",
+        "content": """{
+        "Person is struck by moving vehicle.", "Person gets crushed or trapped by malfunctioning control systems.", "Person gets crushed or pinched by the lifting fork mechanism.",
+        "Person is knocked over by the vehicle.", "Person receives an electrical shock."
+        }"""
+    }
+
+    response =  response = run_chat_hara(
+        messages=[
+            system_prompt,
+            few_shot_user,
+            few_shot_assistant,
+            {
+                "role": "user",
+                "content": f"""{harms}"""
+            }],
+            model=model,
+            expected_format="json",
+            temperature=0.5)
+    print("Clean data:")
+    print(response)
+    return response
 
 
 
@@ -449,7 +504,7 @@ if __name__ == "__main__":
     persons = extract_persons(system, model="openai:gpt-4o")
     hazards = extract_hazards(system, model="openai:gpt-4o")
     harms_dict = harms(system, persons, hazards, model="openai:gpt-4o")
-    harms_summary_list = harms_summary(harms_dict, persons)
+    harms_summary_list = harms_summary(harms_dict, model="openai:gpt-4o")
     print(harms_summary_list)
     #impact_classes = extract_iclasses(system, model="openai:gpt-4o")
     #impact = define_impact(system, impact_classes[0], "Bystander gets hit by the vehicle.", model="openai:gpt-4o")
