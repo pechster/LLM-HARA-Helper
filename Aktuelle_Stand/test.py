@@ -525,7 +525,7 @@ def actuators(system:json, impact_classes: List[str], model:str="google:gemini-1
         "role": "assistant",
         "content": """[
         {'impact_class': 'Moving parts', 'actuators': ['Gripper', 'Elbow joint']},
-        {'impact_class': 'Heavy loads', 'actuators': ['Gripper', 'Elbow joint']}
+        {'impact_class': 'Heavy loads', 'actuators': []}
         ]
         """
     }
