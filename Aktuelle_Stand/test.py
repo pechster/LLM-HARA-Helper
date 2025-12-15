@@ -348,33 +348,41 @@ def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], model:str="google
         You are a diligent thinker and you hate repeating yourself.
 
         TASK:
-        You must review a list of scenarios, endangering the life of a person. 
-        
-        1. Replace all human roles in your answer with the word "Person" 
-        2. Eliminate only scenarios that describe the SAME harm, but paraphrased.
-        3. Do not eliminate scenarios if they have a difference in:
+        You must review a list of scenarios, endangering the life of a person. Semantically deduplicate them into an array of unique harms.
+
+        UNBREAKABLE RULE:
+        If you find redundancy:
+        - Prefer rewriting the more detailed harm to remove the overlapping information.
+        - Remove a harm only if all of its information is contained in another harm.
+
+        RULES:
+        1. Eliminate only scenarios that describe the SAME harm, even if paraphrased.
+        2. Do not eliminate scenarios if they have a difference in:
             - injury mechanism (e.g. struck, crushed, trapped)
             - source (vehicle moving <-> lifting mechanism <-> electrical)
             - failure (normal behavior <-> malfunctioning or unintended behavior)
-        4. ALWAYS keep the most information-dense and generalized scenario for each UNIQUE danger. Prioritize longer harms, containing multiple similar injury mechanisms (e.g. keep "stuck or crushed", but not just "struck")
-        5. Single out all semantically unique harms.
-        6. You are allowed to regroup semantically similar concepts or break them into two groups to aid the process, but keep as close to the original wording as possible. You can only group two separate injury mechanisms or sources together in one harm. The end result must be a list of fully semantically unique harms.
+        3. Keep the most information-dense and generalized scenario for each UNIQUE danger.
+        4. Do not oversaturate a harm with information - a harm must containt no more than 3 semntically significant phrases.
 
         OUTPUT FORMAT:
-        Return only a valid JSON array of strings without any trailing or preceding spaces."""
+        Return only a valid JSON array of strings without any trailing or preceding spaces.
+        """
     }
     
     few_shot_user = {
         "role": "user",
-        "content": f"{["Safety Officer is struck by moving vehicle.", "Manager gets injured by the vehicle.", "Maintenance Technician gets crushed or trapped by malfunctioning control systems.",
-                       "Warehouse Worker gets crushed or pinched by the lifting fork mechanism.", "Maintenance Technician is knocked over by the vehicle.", "Maintenance Technician receives an electrical shock."]}"
+        "content": f"{['Electric shock or electrical burns', 'Thermal burns', 'Chemical irritation or burns', 'Musculoskeletal strain or repetitive stress injury', 
+                       'Unexpected robot motion causing impact or crushing injuries', 'Hearing impairment or hand-arm vibration injury', 'Pinching or impact injuries', 'Impact injuries or bruising', 
+                       'Electric shock or electrical burns', 'Thermal burns', 'Skin or eye irritation', 'Musculoskeletal strain', 'Impact injury or pinching', 'Hearing discomfort or vibration-related hand and arm discomfort',
+                       'Pinching or impact injuries', 'Impact injuries or bruising']}"
     }
 
     few_shot_assistant = {
         "role": "assistant",
         "content": """{
-        "Person is struck by moving vehicle.", "Person gets crushed or trapped by malfunctioning control systems.", "Person gets crushed or pinched by the lifting fork mechanism.",
-        "Person is knocked over by the vehicle.", "Person receives an electrical shock."
+        'Electric shock or electrical burns', 'Thermal burns', 'Chemical irritation or burns', 'Musculoskeletal strain or repetitive stress injury',
+        'Unexpected robot motion causing impact or crushing injuries', 'Hearing discomfort or vibration-related hand and arm discomfort or injury',
+        'Pinching or impact injuries', 'Bruising', 'Skin or eye irritation'
         }"""
     }
 
@@ -616,11 +624,11 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
     system_prompt = {
         "role": "system",
         "content": f"""
-        You are an expert in Hazard Analysis and Risk Assessment (HARA).
+        You are an expert in Hazard Analysis and Risk Assessment (HARA) and the field elechtromechanics.
 
         TASK: 
-        Identify the actuators that directly or indirectly influence the physical values of the system, given a list of impact classes and a system description. Aim to generate a comprehensive series of actuators for each impact class.
-        An actuator is a physical component of the system that when active, has a direct relationship with the impact (e.g. Drone is moving -> actuator is "Rotors").
+        You are given a system description and a list of impact classes. 
+        Identify the mechanical actuators that directly or indirectly influence the physical parameters (force, speed, RPM, etc.) of the system.
 
         RULES:
         1. The extracted actuators must be a specific physical part of the system hardware mechanisms.
@@ -643,8 +651,8 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
     few_shot_assistant = {
         "role": "assistant",
         "content": """[
-        {'impact_class': 'Moving parts', 'actuators': ['Arm Gripper', 'Elbow joint']},
-        {'impact_class': 'Heavy loads', 'actuators': []}
+        {'impact_class': 'Moving parts', 'actuators': ['Arm Gripper', 'Elbow joint', 'Finger joint', 'Wrist']},
+        {'impact_class': 'Heavy loads', 'actuators': [Finger joint]}
         ]
         """
     }
@@ -856,14 +864,15 @@ if __name__ == "__main__":
     persons = extract_persons(system, model="openai:gpt-5.2")
     hazards = extract_hazards(system, model="openai:gpt-5.2")
     harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
+    print("Printing harms summary:")
     harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
     #print(harms_summary_list)
-    impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
-    impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
+    #impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
+    #impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
     #print(impacts_dict)
-    failure_modes = identify_failure_modes(system, model="openai:gpt-5.2")
+    #failure_modes = identify_failure_modes(system, model="openai:gpt-5.2")
 
-    display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict)
+    #display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict)
 
     #actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
     #print(actuators)
