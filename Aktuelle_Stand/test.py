@@ -689,11 +689,12 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
         - Failure modes are a predefined set: ("Provision Commission", "Provision Ommision", "Value too low", "Value too high", "Value incorrect", "Timing early", "Timing late")
         - Actuator is the active physical component (e.g. Arm Gripper).
         - Impact is a hazardous/dangerous situation, or harm. (e.g. explosion, fire, electric arc).
-        - A failure is a specific event, where the system acts in an unsafe and unintended way.
+        - A failure is a system deviation in an actuator or system behavior.
 
         RULES:
-        1. Failures must be a clear detailed system event (no abstraction or ambiguity).
-        2. A failure must not restate the impact or the failure mode.
+        1. Failures MUST be a clear detailed system event (no abstraction or ambiguity).
+        2. The impact and MUST NOT be repeated in the failure.
+        2. A failure MUST NOT contain information about what the failure causes, because it is already contained in the impact.
 
         OUTPUT FORMAT:
         Return only a valid JSON dictionary of the form:
@@ -747,6 +748,8 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
             system_prompt,
             few_shot_user,
             few_shot_assistant,
+            few_shot_user2,
+            few_shot_assistant2,
             {
                 "role": "user",
                 "content": f"""Define a multitude of unique failures associated with:
