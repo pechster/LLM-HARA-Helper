@@ -634,7 +634,7 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
         1. The extracted actuators must be a specific physical part of the system hardware mechanisms.
         2. Add descriptive adjectives only when they bring significant additional information (e.g. generate "Drone rotor" instead of "Bottom left drone rotor").
         3. If an actuator is part of a specific component in the machine, then keep the details for it (e.g. "Engine cog wheel" instead of "Cog wheel").
-        4. Keep the total list of actuators overall unique and don't repeat components.
+        4. Keep the total list of actuators unique across all impact classes; don't repeat components.
 
         OUTPUT FORMAT:
         Return a valid JSON list of dictionaries, where the key is an impact class (string) and the value is a string of all associated actuators, e.g.:
@@ -651,10 +651,9 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
     few_shot_assistant = {
         "role": "assistant",
         "content": """[
-        {'impact_class': 'Moving parts', 'actuators': ['Arm Gripper', 'Elbow joint', 'Finger joint', 'Wrist']},
-        {'impact_class': 'Heavy loads', 'actuators': [Finger joint]}
-        ]
-        """
+            {"impact_class": "Moving parts", "actuators": ["Arm gripper", "Forearm lever", "Joint motors"]},
+            {"impact_class": "Heavy loads", "actuators": ["Hydraulic cylinder", "Load-bearing frame"]}
+        ]"""
     }
 
     response = run_chat_hara(
@@ -860,22 +859,22 @@ def display_hara_summary(
 
 
 if __name__ == "__main__":
-    system = extract_system("A small, six-axis collaborative robot, designed to work alongside human assembly workers on a shared workbench. The Cobot's primary task is to pick up small electronic components and accurately place them into circuit boards. It moves slowly, with a maximum payload of 1kg and a speed of 0.5m/s", model="openai:gpt-4o")
+    system = extract_system("A small, six-axis collaborative robot, designed to work alongside human assembly workers on a shared workbench. The Robot's primary task is to pick up small electronic components and accurately place them into circuit boards. It moves slowly, with a maximum payload of 1kg and a speed of 0.5m/s", model="openai:gpt-4o")
     persons = extract_persons(system, model="openai:gpt-5.2")
-    hazards = extract_hazards(system, model="openai:gpt-5.2")
-    harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
-    print("Printing harms summary:")
-    harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
+    #hazards = extract_hazards(system, model="openai:gpt-5.2")
+    #harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
+    #harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
     #print(harms_summary_list)
-    #impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
+    impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
     #impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
     #print(impacts_dict)
     #failure_modes = identify_failure_modes(system, model="openai:gpt-5.2")
 
     #display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict)
 
-    #actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
-    #print(actuators)
+    actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
+    for a in actuators:
+        print(a)
     #failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
     
         
