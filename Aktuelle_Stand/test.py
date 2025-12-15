@@ -679,13 +679,21 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
         
         TASK:
         Analyze the situation given the description of a system, the specified failure mode, actuator and an impact.
-        Infer the answer to the question: "To which failure would a <<failure mode>> of actuator <<actuator>> lead, causing <<impact>>?"
-        Generte a list of possible failures, while not allowing any redundancy.
+        Infer the answer to the question:
+        "To which failure would a <<failure mode>> of actuator <<actuator>> lead, causing <<impact>>?"
+        List all plausible system failures that:
+        - share logical connection with the failure mode and the actuator.
+        - can directly or indirectly cause the impact.
         
         DEFINITIONS:
-        - Failure modes are a predefined failure model, containing ("Provision Commission", "Provision Ommision", "Value too low", "Value too high", "Value incorrect", "Timing early", "Timing late")
-        - Actuator is the physical component itself (e.g. "Arm Gripper")
-        - Impact is a hazardous/dangerous situation, or harm.
+        - Failure modes are a predefined set: ("Provision Commission", "Provision Ommision", "Value too low", "Value too high", "Value incorrect", "Timing early", "Timing late")
+        - Actuator is the active physical component (e.g. Arm Gripper).
+        - Impact is a hazardous/dangerous situation, or harm. (e.g. explosion, fire, electric arc).
+        - A failure is a specific event, where the system acts in an unsafe and unintended way.
+
+        RULES:
+        1. Failures must be a clear detailed system event (no abstraction or ambiguity).
+        2. A failure must not restate the impact or the failure mode.
 
         OUTPUT FORMAT:
         Return only a valid JSON dictionary of the form:
@@ -712,6 +720,26 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
         'One or more rotors stop rotating too late', 'One or more rotors change rotation speed too late']
         }]
         """
+    }
+
+    few_shot_user2 = {
+        "role": "user",
+        "content": """Give me all failures connected to this situation: 
+        - system: {'name': 'Robot arm', 'description': 'A stationary robot arm that can pick up and drop packages loaded onto a pallet, weight capacity is 100 kg.}
+        - failure mode:  {'failure_mode': 'Value Incorrect', 'description': 'Something is actuated to an incorrect value.'}
+        - actuator : {'actuator': 'Electromechanical brake'}. 
+        - impact: {'impact': 'Impact injury from the robot arm'}
+        """
+    }
+
+    few_shot_assistant2 = {
+        "role": "assistant",
+        "content": """{
+        "question": "To which failure would a Value Incorrect of actuator Electromechanical brake lead, causing impact injury from the robot arm?",
+        "failures": [
+            "Electromechanical brake does not activate upon machine switch off", "Electromechanical brake does not stop initiated motion", "Electromechanical brake in gripper deactivates prematurely"
+        ]
+        }"""
     }
 
     response = run_chat_hara(
@@ -875,7 +903,7 @@ if __name__ == "__main__":
     actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
     for a in actuators:
         print(a)
-    #failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
+    failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
     
         
 
