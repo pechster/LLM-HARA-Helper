@@ -7,6 +7,8 @@ import ast
 from typing import List, Dict, Any
 from HELPERS import *
 from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel 
 #added semantic embeddings - pip install sentence-transformers scikit-learn
 #from sentence_transformers import SentenceTransformer
 #from sklearn.cluster import DBSCAN
@@ -32,28 +34,40 @@ def extract_system(user_input:str, model:str="google:gemini-1.5-pro"):
         - "description": (string, a concise summary of capabilites and limits)
         """}
     
-    few_shot_user = {
+    few_shot_user1 = {
         "role": "user",
         "content": "A cargo drone that carry cargos up to 5kg with a speed of 3m/s."
     }
 
-    few_shot_assistant = {
+    few_shot_assistant1 = {
         "role": "assistant",
         "content": '{"name": "Cargo Drone", "description": "Carries cargo up to 5kg with a speed of 3m/s"}'
+    }
+
+    few_shot_user2 = {
+    "role": "user",
+    "content": "A mobile robot transports heavy pallets in a warehouse. It has a lifting fork mechanism."
+    }
+
+    few_shot_assistant2 = {
+        "role": "assistant",
+        "content": '{"name": "Automated Guided Vehicle", "description": "Mobile robot transporting heavy pallets using a lifting fork mechanism in a warehouse."}'
     }
 
     response = run_chat_hara(
         messages=[
             system_prompt,
-            few_shot_user,
-            few_shot_assistant,
+            few_shot_user1,
+            few_shot_assistant1,
+            few_shot_user2,
+            few_shot_assistant2,
             {
                 "role": "user",
                 "content": user_input
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
 
     print(response)
@@ -75,12 +89,12 @@ def extract_persons(system:json, model:str="openai:gpt-4o-mini"):
         - "role": (string, a concise summary of their interaction with the system)
         """}
     
-    few_shot_user = {
+    few_shot_user1 = {
         "role": "user",
         "content": "Identifty all relevant persons for the system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}."
     }
 
-    few_shot_assistant = {
+    few_shot_assistant1 = {
         "role": "assistant",
         "content": """[
             {"name": "Operator", "role": "Controls and monitors the cargo drone during its operations."},
@@ -89,19 +103,37 @@ def extract_persons(system:json, model:str="openai:gpt-4o-mini"):
             {"name": "Cleaning Staff", "role": "Responsible for cleaning the areas where the cargo drone operates."}
         ]"""
     }
+
+    few_shot_user2 = {
+        "role": "user",
+        "content": "Identifty all relevant persons for the system: {'name': 'Automated Guided Vehicle', 'description': 'Mobile robot transporting heavy pallets using a lifting fork mechanism in a warehouse.'}"
+    }
+
+    few_shot_assistant2 = {
+        "role": "assistant",
+        "content": """[
+            {"name": "Warehouse Worker", "role": "Performs manual tasks and operates other machinery in the AGV's vicinity."},
+            {"name": "Maintenance Technician", "role": "Performs diagnostic checks, repairs, and calibration on the vehicle's mechanics and software."},
+            {"name": "Fleet Supervisor", "role": "Manages the AGV's schedule, path planning, and emergency stops."},
+            {"name": "Bystander", "role": "Non-affiliated visitors or personnel temporarily passing through the operational area."}
+        ]"""
+    }
+
     
     response = run_chat_hara(
         messages=[
             system_prompt,
-            few_shot_user,
-            few_shot_assistant,
+            few_shot_user1,
+            few_shot_assistant1,
+            few_shot_user2,
+            few_shot_assistant2,
             {
                 "role": "user",
                 "content": f"Identify all relevant persons for the given system. Here is the given system: {system}."
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     print(response)
     return response
@@ -114,24 +146,23 @@ def extract_hazards(system:json, model:str="google:gemini-1.5-pro"):
         You are an expert in Hazard Analysis and Risk Assessment (HARA) and functional safety engineering. Your primary expertise is classifying hazards based on system specifications.
 
         TASK: 
-        Analyze the given system description to identify ALL high-level hazard classes that could potentially arise from its operation, malfunction, or failure.
+        Analyze the given system description to identify ALL relevant high-level hazard classes.    
+                          
+        CRITICAL ABSTRACTION RULES:
+        1. **Use ONLY** the following high-level categories: ["Mechanical", "Kinetic", "Electrical", "Thermal", "Chemical", "Radiation", "Ergonomics", "Software/Control System", "Noise/Vibration"].
+        2. Select only the classes that are logically applicable to the system's described functionality and environment.
+        3. DO NOT include any classes not in the provided list.
 
         OUTPUT FORMAT:
-        Return a single, valid JSON array of strings. Do not include any text before or after the JSON. 
-        
-        IMPORTANT ABSTRACTION RULES:
-        1. **Be Abstract:** The output must use broad, high-level categories (e.g., 'Electrical/Thermal', 'Kinetic') and must NOT use specific failure events (e.g., 'Collision', 'Lifting', 'Falling').
-        2. **Group Related Concepts:** Combine related hazards into a single, comprehensive class (e.g., combine 'Software', 'Control System', and 'Cybersecurity' into one class).
-
-        Each element in the array must be the concise name of a hazard class (e.g., "Mechanical", "Electrical/Thermal").
+        Return a single, valid JSON array of strings. Do not include any text before or after the JSON.
         """}
     
-    few_shot_user = {
+    few_shot_user1 = {
         "role": "user",
-        "content": "Identifty all relevant persons for the system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}"
+        "content": "Identifty all relevant hazards for the system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}"
     }
 
-    few_shot_assistant = {
+    few_shot_assistant1 = {
     "role": "assistant",
     "content": """[
         "Mechanical", 
@@ -140,20 +171,38 @@ def extract_hazards(system:json, model:str="google:gemini-1.5-pro"):
         "Chemical", 
         "Information"
     ]"""
-}
+    }
+
+    few_shot_user2 = {
+    "role": "user",
+    "content": "Identifty all relevant hazards for the system: {'name': 'Automated Guided Vehicle', 'description': 'Mobile robot transporting heavy pallets using a lifting fork mechanism in a warehouse.'}"
+    }
+
+    few_shot_assistant2 = {
+        "role": "assistant",
+        "content": """[
+            "Mechanical", 
+            "Kinetic", 
+            "Electrical", 
+            "Thermal", 
+            "Software/Control System"
+        ]"""
+    }
     
     response = run_chat_hara(
         messages=[
             system_prompt,
-            few_shot_user,
-            few_shot_assistant,
+            few_shot_user1,
+            few_shot_assistant1,
+            few_shot_user2,
+            few_shot_assistant2,
             {
                 "role": "user",
                 "content": f"Identify all potential hazard classes for the given system. Here is the given system: {system}."
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     print(response)
     return response
@@ -166,46 +215,64 @@ def define_harm(system:json, person:str, hazard_class:str, model:str="google:gem
         You are an expert in Hazard Analysis and Risk Assessment (HARA). 
 
         TASK: 
-        Based on the provided system description, person, and hazard class, please answer the following guide phrase: How could the <<system>> potentially cause harm to the <<person>> through <<hazard class>>?
-        When answering, fill in the guide phrase so it is formated in proper English. So intead of "How could the drone potentially cause harm to the Operator through Electric" which doesn't sound right, you would answer "How could the drone potentially cause harm to the Operator through Electricity?".
-        The answer returned at the end should be as general as possible without going into specific failure modes or events. Do not give any reasons or explanations, just answer the question directly. So instead of "Mechanic gets electric shock from open wires because of improper maintenance" you would answer "Mechanic gets electric shock.".
+        Based on the provided system description, person, and hazard class, answer the guide phrase: How could the <<system>> potentially cause harm to the <<person>> through <<hazard class>>?
 
-        
+        CRITICAL OUTPUT RULE:
+        The 'harm' value must be a concise, general description of the harm caused. Do not use specific person names, and do not include the ultimate consequence (e.g., 'Death', 'Amputation').
+        Do not give any reasons as well, only consider the harm done. So for example, instead of 'Electric shock or electrical burns from contact with exposed or damaged robot wiring, connectors, or end-effector electronics during inspection.', just return 'Electric shocl or electrical burns'.
+
         OUTPUT FORMAT:
         Return only a valid JSON object with exactly these keys:
         - "guide_phrase": (string, the filled guide phrase)
-        - "hazard_class": (string, the provided hazard class)
-        - "person": (string, name of the provided person)
-        - "harm": (string, a concise description of the specific harm that could result)
+        - "hazard_class": (string)
+        - "person": (string)
+        - "harm": (string)
         """}
     
-    few_shot_user = {
+    few_shot_user1 = {
         "role": "user",
         "content": "Define a specific hazard based on the system, person, and hazard class. Here is the given system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}, the person: 'Mechanic', and the hazard class: 'Electric'."
     }
 
-    few_shot_assistant = {
+    few_shot_assistant1 = {
         "role": "assistant",
         "content": """{
-            "guide_phrase": "How could the cargo drone potentially cause harm to the Maintenance Technician through Electricity?",
+            "guide_phrase": "How could the cargo drone potentially cause harm to the Mechanic through Electricity?",
             "hazard_class": "Electric",
             "person": "Mechanic",
             "harm": "Mechanic gets electric shock."
+        }"""
+    }
+
+    few_shot_user2 = {
+    "role": "user",
+    "content": "Define a specific hazard based on the system, person, and hazard class. Here is the given system: {'name': 'Automated Guided Vehicle', 'description': 'Mobile robot transporting heavy pallets'}, the person: 'Warehouse Worker', and the hazard class: 'Mechanical'."
+    }
+
+    few_shot_assistant2 = {
+        "role": "assistant",
+        "content": """{
+                "guide_phrase": "How could the Automated Guided Vehicle potentially cause harm to the Warehouse Worker through Mechanical means?",
+                "hazard_class": "Mechanical",
+                "person": "Warehouse Worker",
+                "harm": "Warehouse Worker gets crushed or trapped."
         }"""
     }
     
     response = run_chat_hara(
         messages=[
             system_prompt,
-            few_shot_user,
-            few_shot_assistant,
+            few_shot_user1,
+            few_shot_assistant1,
+            few_shot_user2,
+            few_shot_assistant2,
             {
                 "role": "user",
                 "content": f"Define a specific hazard based on the system, person, and hazard class. Here is the given system: {system}, the person: {person}, and the hazard class: {hazard_class}."
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     print(response)
     return response
@@ -322,7 +389,7 @@ def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], model:str="google
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=1)
     print("Clean data:")
     print(response)
     return response
@@ -337,7 +404,7 @@ def extract_iclasses(system:json, model:str="google:gemini-1.5-pro"):
         You are an expert in Hazard Analysis and Risk Assessment (HARA). 
 
         TASK: 
-        Based on the provided system description, please extract all the impact class(physical value) of the system. Impact classes would be general operational aspects of the system that could lead to harm, such as "Rotating parts", "Moving parts", "High Voltage", "Chemical exposure", etc.
+        Based on the provided system description, please extract all the impact class(physical value) of the system. Impact classes would be general operational aspects of the system that could lead to harm, such as "Rotating parts", "Moving parts", etc.
         Do not yet consider any interaction with persons or specific harms, only focus on the system itself.
         The given system will include a Name, namely the type of system, and a Description, which outlines its capabilities and limitations. Please only consider the characteristics that are directly relevant to the system's described functionalities and operational context.
 
@@ -345,12 +412,12 @@ def extract_iclasses(system:json, model:str="google:gemini-1.5-pro"):
         Return only a valid JSON array with strings as elements.
         """}
     
-    few_shot_user = {
+    few_shot_user1 = {
         "role": "user",
         "content": "Classify the impact class of the given system. Here is the given system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}."
     }
 
-    few_shot_assistant = {
+    few_shot_assistant1 = {
         "role": "assistant",
         "content": """[
             "Rotating parts", 
@@ -359,19 +426,36 @@ def extract_iclasses(system:json, model:str="google:gemini-1.5-pro"):
             "Moving actuators"
         ]"""
     }
+
+    few_shot_user2 = {
+        "role": "user",
+        "content": "Classify the impact class of the given system. Here is the given system: {'name': 'Automated Guided Vehicle', 'description': 'Mobile robot transporting heavy pallets using a lifting fork mechanism in a warehouse.'}"
+    }   
+
+    few_shot_assistant2 = {
+        "role": "assistant",
+        "content": """[
+            "Moving parts",
+            "Lifting mechanism",
+            "Moving actuators",
+            "Position"
+        ]"""
+    }
     
     response = run_chat_hara(
         messages=[
             system_prompt,
-            few_shot_user,
-            few_shot_assistant,
+            few_shot_user1,
+            few_shot_assistant1,
+            few_shot_user2,
+            few_shot_assistant2,
             {
                 "role": "user",
                 "content": f"Classify the impact class of the given system. Here is the given system: {system}."
             }],
             model=model,
             expected_format="json",
-            temperature=0)
+            temperature=0.8)
     
     print(response)
     return response
@@ -388,6 +472,7 @@ def define_impact(system:json, impact_class:str, harms: str, model:str="google:g
         Based on the provided system description, given impact class, and a given harm, please answer the following guide phrase: By influencing which physical value through <<impact class>> could the <<system>> cause <<harm>>?
         The harm given is defined for a specific person with a role, like an engineer or a mechanic. I want you to generalise the harm so that it is not linked to a specific person, but rather just the harm itself. 
         For example, instead of "Safety Officer gets struck by the vehicle" you would change it to "Vehicle strikes a person".
+        The physical value at the end must make sense with the impact class and the harm caused.
 
 
         OUTPUT FORMAT:
@@ -397,32 +482,66 @@ def define_impact(system:json, impact_class:str, harms: str, model:str="google:g
         - "harm_caused": (string, generalised harm that could result)
         """}
     
-    few_shot_user = {
+    few_shot_user1 = {
         "role": "user",
-        "content": "Define the impact based on the system, impact class, and harm. Here is the given system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}, the impact class: 'Rotating parts', and the harm: 'Mechanic gets electric shock.'}."
+        "content": "Define the impact based on the system, impact class, and harm. Here is the given system: {'name': 'Cargo Drone', 'description': 'Carries cargo up to 5kg with a speed of 3m/s'}, the impact class: 'Rotating parts', and the harm: 'Mechanic hit by drone.'}."
     }
 
-    few_shot_assistant = {
+    few_shot_assistant1 = {
         "role": "assistant",
         "content": """{
             "guide_phrase": "By influencing which physical value through rotating parts could the cargo drone hit a person?",
             "impact_class": "Rotating parts",
-            "physical_value": ["The drone's propelles are rotating (RPM)", "The drone's propellers generate lift force"]}
+            "physical_value": ["The drone's propelles are rotating (RPM)"]}
             """
     }
+
+    few_shot_user2 = {
+    "role": "user",
+    "content": "Define the impact based on the system, impact class, and harm. Here is the given system: {'name': 'Automated Guided Vehicle', 'description': 'Mobile robot transporting heavy pallets'}, the impact class: 'Moving parts', and the harm: 'Warehouse Worker gets crushed.'}."
+    }
+
+    few_shot_assistant2 = {
+    "role": "assistant",
+    "content": """{
+            "guide_phrase": "By influencing which physical value through moving parts could the Automated Guided Vehicle cause injury?",
+            "impact_class": "Moving parts",
+            "physical_value": ["The vehicle's fork lift is moving"]}
+    }"""
+    }
+
+    #few_shot_user3 = {
+    #"role": "user",
+    #"content": "Define the impact based on the system, impact class, and harm. Here is the given system: {'name': 'Automated Guided Vehicle', 'description': 'Mobile robot transporting heavy pallets'}, the impact class: 'Moving parts', and the harm: 'Warehouse worker gets electric shock.'}."
+    #}
+#
+    #few_shot_assistant3 = {
+    #    "role": "assistant",
+    #    "content": """{
+    #            "guide_phrase": "By influencing which physical value through moving parts could the Automated Guided Vehicle cause injury?",
+    #            "impact_class": "Moving parts",
+    #            "physical_value": ["N/A"]}
+    #    }"""  
+    #}
+
+
 
     response = run_chat_hara(
         messages=[ 
             system_prompt,
-            few_shot_user,
-            few_shot_assistant,
+            few_shot_user1,
+            few_shot_assistant1,
+            few_shot_user2,
+            few_shot_assistant2,
+            #few_shot_user3,
+            #few_shot_assistant3,
             {
                 "role": "user",
                 "content": f"Define the impact based on the system, impact class, and harm. Here is the given system: {system}, the impact class: {impact_class}, and the harm: {harms}."
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     print(response)
     return response
@@ -488,7 +607,7 @@ def identify_failure_modes(system:json, model:str="google:gemini-1.5-pro"):
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     print(response)
     return response
@@ -541,7 +660,7 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
             }],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     return response
 
@@ -603,29 +722,153 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
             """}],
             model=model,
             expected_format="json",
-            temperature=0.5)
+            temperature=0.8)
     
     print(response)
     return response
+
+
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel 
+from typing import List, Dict, Any
+
+
+
+def display_hara_summary(
+    system_data: Dict[str, str],            # Expects Python Dict: {'name': '...', 'description': '...'}
+    persons_data: List[Dict[str, str]],     # Expects Python List of Dicts: [{'name': '...', 'role': '...'}, ...]
+    hazards_data: List[str],                # Expects Python List of Strings: ['Mechanical', 'Kinetic', ...]
+    harms_summary_list: List[str],
+    impacts_dict: Dict[str, List[Dict[str, Any]]]
+):
+    """
+    Formats and prints the results of the HARA pipeline steps using the 'rich' library 
+    for clear, segmented, and professional output.
+    """
+    console = Console()
     
+    # --- 1. System Definition (STEP 1) ---
+    console.rule("[bold #6495ED]==== STEP 1: SYSTEM DEFINITION (extract_system) ====")
+    try:
+        system = system_data
+        system_panel = Panel(
+            f"[bold cyan]SYSTEM NAME:[/bold cyan] {system.get('name', 'N/A')}\n"
+            f"[bold cyan]DESCRIPTION:[/bold cyan] {system.get('description', 'N/A')}",
+            title="[bold blue]System Under Analysis (S.U.A.)[/bold blue]",
+            border_style="blue"
+        )
+        console.print(system_panel)
+    except Exception:
+        console.print("[bold red]ERROR: Could not process System data. Check input format.[/bold red]")
+
+
+    # --- 2. Persons at Risk (STEP 2) ---
+    console.rule("[bold #6495ED]==== STEP 2: PERSONS AT RISK (extract_persons) ====")
+    try:
+        persons = persons_data
+        if persons:
+            persons_table = Table(title="Persons Interacting with the System", show_header=True, header_style="bold magenta")
+            persons_table.add_column("Name", style="#90EE90", justify="left")
+            persons_table.add_column("Role and Interaction Summary", style="dim", justify="left")
+            
+            for p in persons:
+                persons_table.add_row(p.get('name', 'N/A'), p.get('role', 'N/A'))
+            
+            console.print(persons_table)
+        else:
+            console.print("No persons identified.")
+    except Exception:
+        console.print("[bold red]ERROR: Could not process Persons data. Check input format.[/bold red]")
+
+
+    # --- 3. Hazard Classes (STEP 3) ---
+    console.rule("[bold #6495ED]==== STEP 3: HIGH-LEVEL HAZARD CLASSES (extract_hazards) ====")
+    try:
+        hazards = hazards_data
+        if hazards and isinstance(hazards, list):
+            # 
+            hazard_str = f"[bold yellow]{', '.join(hazards)}[/bold yellow]"
+            console.print(Panel(
+                hazard_str, 
+                title="[bold yellow]Applicable Hazard Categories[/bold yellow]",
+                border_style="yellow"))
+        else:
+            console.print("No hazards identified or data format is incorrect.")
+    except Exception:
+        console.print("[bold red]ERROR: Could not process Hazard Classes data. Check input format.[/bold red]")
+
+
+    # --- 4. Consolidated Harm Summary (STEP 4) ---
+    console.rule("[bold #6495ED]==== STEP 4: CONSOLIDATED UNIQUE HARMS (harms_summary) ====")
+    if harms_summary_list:
+        harm_list_formatted = []
+        for idx, harm in enumerate(harms_summary_list):
+            harm_list_formatted.append(f"[bold red]{idx + 1}.[/bold red] {harm}")
+            
+        console.print(Panel(
+            "\n".join(harm_list_formatted), 
+            title="[bold red]Unique Harm Events (Post-Clustering)[/bold red]",
+            border_style="red"))
+    else:
+        console.print("No unique harms identified.")
+
+
+    # --- 5. Impact Matrix (STEP 5) ---
+    console.rule("[bold #6495ED]==== STEP 5: IMPACT MATRIX (extract_iclasses / define_impact) ====")
+    impact_table = Table(
+        title="Impact Classes & Associated Physical Values", 
+        show_header=True, 
+        header_style="bold green"
+    )
+    impact_table.add_column("Impact Class", style="#ADFF2F", justify="left")
+    impact_table.add_column("Associated Quantifiable Physical Values", style="dim", justify="left")
+
+    for ic, impact_list in impacts_dict.items():
+        all_pvs = set()
+        if impact_list and isinstance(impact_list, list):
+            # Aggregate unique physical values across all harms for this Impact Class
+            for impact_dict in impact_list:
+                if 'physical_value' in impact_dict and isinstance(impact_dict['physical_value'], list):
+                    # Filter out 'N/A' responses if they exist
+                    for pv in impact_dict['physical_value']:
+                        if pv and 'n/a' not in pv.lower():
+                            all_pvs.add(pv)
+
+            # Sort and display a maximum of 4 key values
+            sorted_pvs = sorted(list(all_pvs))
+            value_str = ", ".join(sorted_pvs[:4])
+            if len(sorted_pvs) > 4:
+                value_str += ", [i]... more[/i]"
+        else:
+            value_str = "[i]No relevant physical values extracted.[/i]"
+        
+        impact_table.add_row(ic, value_str or "[i]None identified[/i]")
+        
+    console.print(impact_table)
+
+    # Note: Call display_actuator_failure_summary next in your main block
+    # console.rule("[bold #6495ED]==== HARA ANALYSIS COMPLETE ====")
 
 
 if __name__ == "__main__":
-    system = extract_system("A mobile robot (AGV) transports heavy pallets in a warehouse shared with human workers. It has a lifting fork mechanism.", model="openai:gpt-4o")
-    #persons = extract_persons(system, model="openai:gpt-4o")
-    #hazards = extract_hazards(system, model="openai:gpt-4o")
-    #harms_dict = harms(system, persons, hazards, model="openai:gpt-4o")
-    #harms_summary_list = harms_summary(harms_dict, model="openai:gpt-4o")
+    system = extract_system("A small, six-axis collaborative robot, designed to work alongside human assembly workers on a shared workbench. The Cobot's primary task is to pick up small electronic components and accurately place them into circuit boards. It moves slowly, with a maximum payload of 1kg and a speed of 0.5m/s", model="openai:gpt-4o")
+    persons = extract_persons(system, model="openai:gpt-5.2")
+    hazards = extract_hazards(system, model="openai:gpt-5.2")
+    harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
+    harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
     #print(harms_summary_list)
-    impact_classes = extract_iclasses(system, model="openai:gpt-4o")
-    #impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-4o")
+    impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
+    impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
     #print(impacts_dict)
-    #print(impacts_dict)
-    #failure_modes = identify_failure_modes(system, model="openai:gpt-4o")
-    actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
-    print(actuators)
-    failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
-            
+    failure_modes = identify_failure_modes(system, model="openai:gpt-5.2")
+
+    display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict)
+
+    #actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
+    #print(actuators)
+    #failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
+    
         
 
     
