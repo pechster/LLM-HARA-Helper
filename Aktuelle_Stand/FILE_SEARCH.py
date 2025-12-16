@@ -10,7 +10,7 @@ client = ai.Client()
 
 # Identify the request type and content
 def query_detection_LLM(user_query: str, anaylsis: json, previous_queries: list, task_description: str,
-                        model: str = "openai:gpt-4o-mini"):
+                        model = "openai:gpt-5.2"):
     if task_description == "HARA":
         task_description = \
             "You are an expert in HARA analysis who has to review a HARA analysis and execute queries on it."
@@ -48,10 +48,15 @@ def query_detection_LLM(user_query: str, anaylsis: json, previous_queries: list,
     return run_chat(messages, model, "json")
 
 
-# implement get query
-
 # Full replacement function, unfinished
-def complete_querys(user_querys: list[dict], analysis: json, model="openai:gpt-4o-mini"):
+def complete_querys(user_querys: list[dict], analysis: json, hazards=False, model="openai:gpt-5.2"):
+    if hazards:
+        format_requirements = f"""JSON FORMAT:
+                                  - Return a JSON containing the hazards as keys and values for each hazard"""
+    else:
+        format_requirements = f"""JSON FORMAT:
+                                  - Keep the exact style of the analyis
+                                  - Only return one valid JSON object"""
     messages = [
         {"role": "system",
          "content": f"""
@@ -66,9 +71,7 @@ def complete_querys(user_querys: list[dict], analysis: json, model="openai:gpt-4
            old information through the upgraded version
          - clarification = can be skipped
             
-         JSON FORMAT:
-         - Keep the exact style of the analyis
-         - Only return one valid JSON object
+         {format_requirements}
           
         """}
     ]
@@ -88,4 +91,3 @@ def save_file(hara_data: dict, file_name: str):
     path = os.path.join(os.path.dirname(__file__), file_name)
     with open(path, "w") as fd:
         json.dump(hara_data, fd)
-            
