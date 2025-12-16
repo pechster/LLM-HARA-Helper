@@ -362,7 +362,7 @@ def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], model:str="google
             - source (vehicle moving <-> lifting mechanism <-> electrical)
             - failure (normal behavior <-> malfunctioning or unintended behavior)
         3. Keep the most information-dense and generalized scenario for each UNIQUE danger.
-        4. Do not oversaturate a harm with information - a harm must containt no more than 2 semantically significant phrases.
+        4. Do not oversaturate a harm with information - a harm must containt no more than 3 semantically significant phrases.
 
         OUTPUT FORMAT:
         Return only a valid JSON array of strings without any trailing or preceding spaces.
@@ -620,7 +620,7 @@ def identify_failure_modes(system:json, model:str="google:gemini-1.5-pro"):
     print(response)
     return response
 
-def define_actuators(system:json, impact_classes: List[str], model:str="google:gemini-1.5-pro"):
+def define_actuators(system: json, impact_classes: List[str], model: str="google:gemini-1.5-pro"):
     system_prompt = {
         "role": "system",
         "content": f"""
@@ -671,7 +671,7 @@ def define_actuators(system:json, impact_classes: List[str], model:str="google:g
     
     return response
 
-def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, model:str="google:gemini-1.5-pro"):
+def extract_failure(system: json, failure_mode: str, actuator: str, impact: str, model:str="google:gemini-1.5-pro"):
     system_prompt = {
         "role": "system",
         "content": """
@@ -684,6 +684,7 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
         List all plausible system failures that:
         - share logical connection with the failure mode and the actuator.
         - can directly or indirectly cause the impact.
+        Return the most relevant 5 failures.
         
         DEFINITIONS:
         - Failure modes are a predefined set: ("Provision Commission", "Provision Ommision", "Value too low", "Value too high", "Value incorrect", "Timing early", "Timing late")
@@ -736,7 +737,7 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
     few_shot_assistant2 = {
         "role": "assistant",
         "content": """{
-        "question": "To which failure would a Value Incorrect of actuator Electromechanical brake lead, causing impact injury from the robot arm?",
+        "question": "To which failure would a Value too low of actuator Electromechanical brake lead, causing impact injury from the robot arm?",
         "failures": [
             "Electromechanical brake does not activate upon machine switch off", "Electromechanical brake does not stop initiated motion", "Electromechanical brake in gripper deactivates prematurely"
         ]
@@ -765,6 +766,22 @@ def extract_failure(system:json, failure_mode: str, actuator: str, impact: str, 
     print(response)
     return response
 
+def collect_failures(system: json, failure_modes: List[Dict[str, str]], actuators: List[Dict[str, List[str]]], impacts: List[str], model: str="google:gemini-1.5-pro"):
+    failures = {}
+    for failure_mode in failure_modes:
+        for actuator in actuators:
+            failures_list = []
+            for a in actuator["actuators"]:
+                for impact in impacts:
+                    failure = extract_failure(system, failure_mode, a, impact, model)
+                    failures_list.append(failure)
+                if a not in failures.keys():
+                    failures[a] = failures_list
+                else:
+                    failures[a].extend(failures_list)
+
+    return failures
+
 
 from rich.console import Console
 from rich.table import Table
@@ -778,7 +795,10 @@ def display_hara_summary(
     persons_data: List[Dict[str, str]],     # Expects Python List of Dicts: [{'name': '...', 'role': '...'}, ...]
     hazards_data: List[str],                # Expects Python List of Strings: ['Mechanical', 'Kinetic', ...]
     harms_summary_list: List[str],
-    impacts_dict: Dict[str, List[Dict[str, Any]]]
+    impacts_dict: Dict[str, List[Dict[str, Any]]],
+    failure_modes_list: List[Dict[str, str]],
+    actuators_list: List[Dict[str, Any]],
+    failures_dict: Dict[str, List[Dict[str, List[str]]]]
 ):
     """
     Formats and prints the results of the HARA pipeline steps using the 'rich' library 
@@ -885,6 +905,40 @@ def display_hara_summary(
         
     console.print(impact_table)
 
+    console.rule("[bold #6495ED]==== STEP 6: IDENTIFIED FAILURE MODES ====")
+    try:
+        failure_modes = failure_modes_list
+        if failure_modes:
+            failure_modes_table = Table(title="Failure Modes of the System", show_header=True, header_style="bold red")
+            failure_modes_table.add_column("Failure Mode", style="#6A0C0C", justify="left")
+            failure_modes_table.add_column("Description", style="dim", justify="left")
+            
+            for m in failure_modes:
+                failure_modes_table.add_row(m.get('failure_mode', 'N/A'), m.get('description', 'N/A'))
+            
+            console.print(failure_modes_table)
+        else:
+            console.print("No failure modes identified error.")
+    except Exception:
+        console.print("[bold red]ERROR: Could not process failure modes data. Check input format.[/bold red]")
+
+    console.rule("[bold #6495ED]==== STEP 7: ASSIGNED ACTUATORS ====")
+    try:
+        actuators = actuators_list
+        if actuators:
+            actuators_table = Table(title="Actuators Associated with Impact Classes", show_header=True, header_style="bold green")
+            actuators_table.add_column("Impact classes", style="#26AF00", justify="left")
+            actuators_table.add_column("Actuators", style="dim", justify="left")
+            
+            for a in actuators:
+                actuators_table.add_row(a.get('impact_class', 'N/A'), ", ".join(a.get('actuators', [])))
+            
+            console.print(actuators_table)
+        else:
+            console.print("No actuators identified error.")
+    except Exception:
+        console.print("[bold red]ERROR: Could not process actuators data. Check input format.[/bold red]")
+
     # Note: Call display_actuator_failure_summary next in your main block
     # console.rule("[bold #6495ED]==== HARA ANALYSIS COMPLETE ====")
 
@@ -895,18 +949,14 @@ if __name__ == "__main__":
     hazards = extract_hazards(system, model="openai:gpt-5.2")
     harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
     harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
-    print(harms_summary_list)
     impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
-    #impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
-    #print(impacts_dict)
-    #failure_modes = identify_failure_modes(system, model="openai:gpt-5.2")
-
-    #display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict)
-
+    impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
+    failure_modes = identify_failure_modes(system, model="openai:gpt-5.2")
     actuators = define_actuators(system, impact_classes, model="openai:gpt-5.2")
-    for a in actuators:
-        print(a)
-    failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-5.2")
+    # function extract_failure and collect_failures
+    #failures = collect_failures(system, failure_modes, actuators, impacts_dict, model="openai:gpt-5.2")
+    failures = {}
+    display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict, failure_modes, actuators, failures)
     
         
 
