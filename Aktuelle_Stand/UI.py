@@ -15,10 +15,11 @@ def feedback(final_data: json, backend, hara_step):
                                f"you want to trigger the modification.\n")
         else:
             user_query = input(f"\nEnter what you would like to modify about the RISK_ASSESSMENT or enter U if you want"
-                               f"to trigger the modification.\n")
+                               f" to trigger the modification.\n")
         if user_query.lower() == "u":
             break
         response = fs.query_detection_LLM(user_query, final_data, previous_querys, task_description=backend)
+        print(response["type"])
         while response["type"] == "clarification":
             user_query = input("The system seems to be confused about your query could you please refine it:\n" +
                                response["content"] + "\n")
@@ -75,6 +76,7 @@ def main():
                     "of all steps you would like to modify. e.g: I, A, M\n")
 
     letters = [c.strip().lower() for c in changes.split(",")] #Fehlerbehandlung
+    final_hara = {}
     if "s" in letters:
         system = feedback(system, "HARA", "System Under Analysis")
         h.display_system(system)
@@ -96,10 +98,18 @@ def main():
         failure_modes = feedback(failure_modes, "HARA", "Failure Modes")
         h.display_failure_modes(failure_modes)
     if "a" in letters:
-        print(actuators)
         actuators = feedback(actuators, "HARA", "Actuators")
-        print(actuators)
         h.display_actuators(actuators)
+
+    final_hara["System Under Analysis"] = system
+    final_hara["Persons At Risk"] = persons
+    final_hara["Hazards"] = hazards
+    final_hara["Harms Summary"] = harms_summary_list
+    final_hara["Impact"] = impacts_dict
+    final_hara["Failure Modes"] = failure_modes
+    final_hara["Actuators"] = actuators
+    fs.save_file(final_hara, "FINAL_HARA.json")
+    print("Saved to HARA!\n")
 
     standard = ra.identify_standard_prompt(system, model="openai:gpt-5.2")
     if standard["standard_reference"] == "IEC 61508":
