@@ -142,15 +142,15 @@ def evaluate_hazards(hazards: List[Dict], model="openai:gpt-4o-mini") -> List[Di
             JSON FORMAT:
             {{
             "hazard": "{hazard}"
-            "Severity: " {{
+            "Severity": " {{
                 "value" : "S0, S1, S2, S3, UNKNOWN"
                 "reason" : "short explanation why this value is assigned"
             }}, 
-            "Exposure: " {{
+            "Exposure": " {{
                 "value" : "E0, E1, E2, E3, E4, UNKNOWN"
                 "reason" : "short explanation what explains the frequency of the occurrence"
             }},
-            "Controllability: " {{
+            "Controllability": " {{
                 "value" : "C0, C1, C2, C3, UNKNOWN"
                 "reason" : "short explanation what could possibly avoid the occurrence"
             }}
@@ -167,6 +167,7 @@ def ASIL_assessment(hazards: List[Dict]) -> List[Dict]:
     for idx, hazard in enumerate(hazards):
         if not isinstance(hazard, dict):
             hazard = json.loads(hazard)
+        print(json.dumps(hazard, indent=4))
         s = hazard["Severity"]["value"]
         e = hazard["Exposure"]["value"]
         c = hazard["Controllability"]["value"]
@@ -193,3 +194,4 @@ def run_risk_assessment(hazards: List[dict], model: str = "openai:gpt-4o-mini") 
     result = [extract_json(item) for item in result]
     result = ASIL_assessment(result)
     return result
+	
