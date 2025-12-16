@@ -362,7 +362,7 @@ def harms_summary(harms_dict: Dict[str, List[Dict[str, Any]]], model:str="google
             - source (vehicle moving <-> lifting mechanism <-> electrical)
             - failure (normal behavior <-> malfunctioning or unintended behavior)
         3. Keep the most information-dense and generalized scenario for each UNIQUE danger.
-        4. Do not oversaturate a harm with information - a harm must containt no more than 3 semntically significant phrases.
+        4. Do not oversaturate a harm with information - a harm must containt no more than 2 semantically significant phrases.
 
         OUTPUT FORMAT:
         Return only a valid JSON array of strings without any trailing or preceding spaces.
@@ -892,10 +892,10 @@ def display_hara_summary(
 if __name__ == "__main__":
     system = extract_system("A small, six-axis collaborative robot, designed to work alongside human assembly workers on a shared workbench. The Robot's primary task is to pick up small electronic components and accurately place them into circuit boards. It moves slowly, with a maximum payload of 1kg and a speed of 0.5m/s", model="openai:gpt-4o")
     persons = extract_persons(system, model="openai:gpt-5.2")
-    #hazards = extract_hazards(system, model="openai:gpt-5.2")
-    #harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
-    #harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
-    #print(harms_summary_list)
+    hazards = extract_hazards(system, model="openai:gpt-5.2")
+    harms_dict = harms(system, persons, hazards, model="openai:gpt-5.2")
+    harms_summary_list = harms_summary(harms_dict, model="openai:gpt-5.2")
+    print(harms_summary_list)
     impact_classes = extract_iclasses(system, model="openai:gpt-5.2")
     #impacts_dict = impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
     #print(impacts_dict)
@@ -903,10 +903,10 @@ if __name__ == "__main__":
 
     #display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict)
 
-    actuators = define_actuators(system, impact_classes, model="openai:gpt-4o")
+    actuators = define_actuators(system, impact_classes, model="openai:gpt-5.2")
     for a in actuators:
         print(a)
-    failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-4o")
+    failures = extract_failure(system, "Value too low", "Driving Wheels", "Person struck by the vehicle" , model="openai:gpt-5.2")
     
         
 
