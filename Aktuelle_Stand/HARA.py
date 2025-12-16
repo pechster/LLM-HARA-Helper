@@ -778,7 +778,7 @@ from rich.panel import Panel
 from typing import List, Dict, Any
 
 
-def display_system(system: Dict[str, str], console: Console):
+def display_system(system: Dict[str, str]):
     console.rule("[bold #6495ED]==== STEP 1: SYSTEM DEFINITION (extract_system) ====")
     try:
         system_panel = Panel(
