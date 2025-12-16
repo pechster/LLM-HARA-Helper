@@ -35,9 +35,8 @@ def query_detection_LLM(user_query: str, anaylsis: json, previous_queries: list,
             - clarification = the request is still unclear despite conversation history
             
             Rules:
-            - If the user provides statements which can not be used together with the JSON and the previous queries to 
-              map on a valid request type map to clarification.
-            - Otherwise map to the request definition which fits the most
+            - If the users query can not be used to produce a clear task classify it as clarification
+            - In general prefer clarification over every type if the task is not hundret procent clear
             
             JSON FORMAT: 
             {{"type": "request lable", "content": "questions for clarification in case something is unclear 
