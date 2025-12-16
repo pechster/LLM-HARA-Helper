@@ -6,13 +6,16 @@ import IEC61508 as iec
 import ISO26262 as iso
 
 
-def feedback(final_data: json, backend: str):
+def feedback(final_data: json, backend, hara_step):
     previous_querys = []
     query_history = []
     while True:
-        user_query = input(f"\nAbove you can review the complete {backend} analysis. If you want to change something "
-                           "please enter your request in natural language. In case you have entered everything which "
-                           "needs to be changed you can trigger the update process with the letter U.\n")
+        if backend == "HARA":
+            user_query = input(f"\nEnter what you would like to modify about the HARA step: {hara_step} or enter U if "
+                               f"you want to trigger the modification.\n")
+        else:
+            user_query = input(f"\nEnter what you would like to modify about the RISK_ASSESSMENT or enter U if you want"
+                               f"to trigger the modification.\n")
         if user_query.lower() == "u":
             break
         response = fs.query_detection_LLM(user_query, final_data, previous_querys, task_description=backend)
@@ -24,57 +27,100 @@ def feedback(final_data: json, backend: str):
         previous_querys.append(user_query)
 
     if len(query_history) > 0:
-        return fs.complete_querys(query_history, final_data)
-
+        if hara_step == "HAZARD CLASSES":
+            return fs.complete_querys(query_history, final_data, hazards=True)
+        else:
+            return fs.complete_querys(query_history, final_data)
+    else:
+        return final_data
 
 def main():
-    # user_input = "A mobile robot (AGV) transports heavy pallets in a warehouse shared with human workers. It has a
-    # lifting fork mechanism."
+    system = ("""Electronic Parking Brake Description: The system replaces the traditional mechanical handbrake 
+    lever. It utilizes electromechanical actuators to lock the rear wheels, securing the vehicle against rolling 
+    away when stationary. Additionally, it provides a secondary emergency braking function while the vehicle 
+    is in motion.""")
     # user_input = "Unintended Acceleration on Highway"
-    user_input = "Emergency shutdown system in chemical plant"
-    models_to_test = [
-        "openai:gpt-4o-mini",
-        "anthropic:claude-sonnet-4-20250514"
-    ]
+    # user_input = "Emergency shutdown system in chemical plant"
+    #models_to_test = [
+    #    "openai:gpt-4o-mini",
+    #    "anthropic:claude-sonnet-4-20250514"
+    #]
 
-    hara_buffer = []
-    for model in models_to_test:
-        result = h.run_single_hara(user_input, model)
-        hara_buffer.append(result)
+    #hara_buffer = []
+    #for model in models_to_test:
+    #    result = h.run_single_hara(user_input, model)
+    #    hara_buffer.append(result)
+    system = h.extract_system(system, model="openai:gpt-5.2")
+    h.display_system(system)
+    persons = h.extract_persons(system, model="openai:gpt-5.2")
+    h.display_persons(persons)
+    hazards = h.extract_hazards(system, model="openai:gpt-5.2")
+    h.display_hazards(hazards)
+    harms_dict = h.harms(system, persons, hazards, model="openai:gpt-5.2")
+    harms_summary_list = h.harms_summary(harms_dict, model="openai:gpt-5.2")
+    h.display_harms(harms_summary_list)
+    impact_classes = h.extract_iclasses(system, model="openai:gpt-5.2")
+    impacts_dict = h.impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
+    h.display_impacts(impacts_dict)
+    failure_modes = h.identify_failure_modes(system, model="openai:gpt-5.2")
+    h.display_failure_modes(failure_modes)
+    actuators = h.define_actuators(system, impact_classes, model="openai:gpt-5.2")
+    h.display_actuators(actuators)
 
-    final_data = h.synthesize_consensus(hara_buffer, judge_model="openai:gpt-4o")
-    hazards = final_data["verified_hazards"]
-    print("\n======== AUTOMATICALLY GENERATED HARA ANALYSIS ========\n")
-    print(json.dumps(final_data, indent=4))
-    final_data = feedback(final_data, "HARA")
-    print("\n======== RISK ASSESSMENT AFTER PROCESSING THE USERS FEEDBACK  ========\n")
-    print(json.dumps(final_data, indent=4))
+    changes = input("You have the option to modify the results of the HARA analysis. Enter S if you want to modify\n"
+                    "the system description, P if you want to modify the persons, H if you want to modify the\n"
+                    "hazards. If any of those three will be modified then the harms summary will be modified\n"
+                    "automatically. Altough you have the option to modify the impact classes by entering I,\n"
+                    "the failure modes by entering F and the actuators by entering A. Just type in the letters\n"
+                    "of all steps you would like to modify. e.g: I, A, M\n")
 
-    fs.save_file(final_data, "HARA_ANALYSIS.json")
-    print("Saved to HARA analysis!\n")
+    letters = [c.strip().lower() for c in changes.split(",")] #Fehlerbehandlung
+    if "s" in letters:
+        system = feedback(system, "HARA", "System Under Analysis")
+        h.display_system(system)
+    if "p" in letters:
+        persons = feedback(persons, "HARA", "Persons At Risk")
+        h.display_persons(persons)
+    if "h" in letters:
+        hazards = feedback(hazards, "HARA", "Hazard Classes")
+        hazards = list(hazards.keys())
+        h.display_hazards(hazards)
+    if "s" in letters or "p" in letters or "h" in letters:
+        harms_dict = h.harms(system, persons, hazards, model="openai:gpt-5.2")
+        harms_summary_list = h.harms_summary(harms_dict, model="openai:gpt-5.2")
+        h.display_harms(harms_summary_list)
+    if "i" in letters:
+        impacts_dict = feedback(impacts_dict, "HARA", "Impact Classes")
+        h.display_impacts(impacts_dict)
+    if "f" in letters:
+        failure_modes = feedback(failure_modes, "HARA", "Failure Modes")
+        h.display_failure_modes(failure_modes)
+    if "a" in letters:
+        print(actuators)
+        actuators = feedback(actuators, "HARA", "Actuators")
+        print(actuators)
+        h.display_actuators(actuators)
 
-    standard = ra.identify_standard_prompt(user_input, "openai:gpt-4o")
+    standard = ra.identify_standard_prompt(system, model="openai:gpt-5.2")
     if standard["standard_reference"] == "IEC 61508":
         print("IEC 61508")
-        final_risk_assessment = iec.run_risk_assessment(hazards, user_input)
+        final_risk_assessment = iec.run_risk_assessment(harms_summary_list, system)
     elif standard["standard_reference"] == "ISO 26262":
         print("ISO 26262")
-        final_risk_assessment = iso.run_risk_assessment(hazards, "openai:gpt-4o")
+        final_risk_assessment = iso.run_risk_assessment(harms_summary_list, model="openai:gpt-5.2")
     else:
-        risk_assesment_buffer = []
-        for model in models_to_test:
-            result = ra.run_risk_assessment(user_input, hazards, model)
-            risk_assesment_buffer.append(result)
-        final_risk_assessment = ra.synthesize_consensus(risk_assesment_buffer, judge_model="openai:gpt-4o")
+        print(standard["standard_reference"])
+        final_risk_assessment = ra.run_risk_assessment(system, harms_summary_list, model="openai:gpt-5.2")
 
     print("\n======== AUTOMATICALLY GENERATED RISK ASSESSMENT ========\n")
     print(json.dumps(final_risk_assessment, indent=4))
-    final_risk_assessment = feedback(final_risk_assessment, "RISK")
+    final_risk_assessment = feedback(final_risk_assessment, "RISK", "")
     print("\n======== RISK ASSESSMENT AFTER PROCESSING THE USERS FEEDBACK  ========\n")
     print(json.dumps(final_risk_assessment, indent=4))
 
     fs.save_file(final_risk_assessment, "RISK_ASSESSMENT.json")
     print("Saved to risk assessment!\n")
+
 
 if __name__ == "__main__":
     main()
