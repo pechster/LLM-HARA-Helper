@@ -4,7 +4,8 @@ import FILE_SEARCH as fs
 import json
 import IEC61508 as iec
 import ISO26262 as iso
-
+from rich.console import Console
+from concurrent.futures import ThreadPoolExecutor
 
 def feedback(final_data: json, backend, hara_step):
     previous_querys = []
@@ -18,8 +19,11 @@ def feedback(final_data: json, backend, hara_step):
                                f" to trigger the modification.\n")
         if user_query.lower() == "u":
             break
+        elif user_query.lower() == "x":
+            return json
         response = fs.query_detection_LLM(user_query, final_data, previous_querys, task_description=backend)
-        print(response["type"])
+        console = Console()
+        console.print(response["type"])
         while response["type"] == "clarification":
             user_query = input("The system seems to be confused about your query could you please refine it:\n" +
                                response["content"] + "\n")
@@ -28,79 +32,105 @@ def feedback(final_data: json, backend, hara_step):
         previous_querys.append(user_query)
 
     if len(query_history) > 0:
-        if hara_step == "HAZARD CLASSES":
+        if hara_step == "Hazard Classes":
             return fs.complete_querys(query_history, final_data, hazards=True)
         else:
             return fs.complete_querys(query_history, final_data)
     else:
         return final_data
 
+def modify_request_cycle(to_modify : json, backend, hara_step):
+    while True:
+        change_requested = input(f"Would like to modify {hara_step} (y/n)?\n")
+        if change_requested.lower() == "y":
+            modified = feedback(to_modify, backend, hara_step)
+            if hara_step == "System Under Analysis":
+                h.display_system(modified)
+            elif hara_step == "Persons At Risk":
+                h.display_persons(modified)
+            elif hara_step == "Hazard Classes":
+                h.display_hazards(list(modified.keys()))
+            elif hara_step == "Harms Summary":
+                h.display_harms(modified)
+            elif hara_step == "Impact Classes":
+                h.display_impact_classes(modified)
+            elif hara_step == "Failure Modes":
+                h.display_failure_modes(modified)
+            else:
+                h.display_actuators(modified)
+            return modify_request_cycle(to_modify, backend, hara_step)
+        else:
+            return to_modify
+
+def person_thread(system):
+    return h.extract_persons(system, model="openai:gpt-5.2")
+
+
+def hazard_thread(system):
+    return h.extract_hazards(system, model="openai:gpt-5.2")
+
+def impact_classes_thread(system):
+    return h.extract_impact_classes(system, model="openai:gpt-5.2")
+
+def failure_modes_thread(system):
+    return h.identify_failure_modes(system, model="openai:gpt-5.2")
+
+def actuators_thread(system, impact_classes):
+    return h.define_actuators(system, impact_classes, model="openai:gpt-5.2")
+
 def main():
     system = ("""Electronic Parking Brake Description: The system replaces the traditional mechanical handbrake 
     lever. It utilizes electromechanical actuators to lock the rear wheels, securing the vehicle against rolling 
     away when stationary. Additionally, it provides a secondary emergency braking function while the vehicle 
     is in motion.""")
-    # user_input = "Unintended Acceleration on Highway"
-    # user_input = "Emergency shutdown system in chemical plant"
-    #models_to_test = [
-    #    "openai:gpt-4o-mini",
-    #    "anthropic:claude-sonnet-4-20250514"
-    #]
 
-    #hara_buffer = []
-    #for model in models_to_test:
-    #    result = h.run_single_hara(user_input, model)
-    #    hara_buffer.append(result)
     system = h.extract_system(system, model="openai:gpt-5.2")
     h.display_system(system)
-    persons = h.extract_persons(system, model="openai:gpt-5.2")
+
+    with ThreadPoolExecutor() as executor:
+        person_future = executor.submit(person_thread, system)
+        hazard_future = executor.submit(hazard_thread, system)
+        impact_future = executor.submit(hazard_thread, system)
+        failure_modes_future = executor.submit(failure_modes_thread, system)
+        new_system = modify_request_cycle(system, "HARA", "System Under Analysis")
+        persons = person_future.result()
+        hazards = hazard_future.result()
+        impact_classes = impact_future.result()
+        failure_modes = failure_modes_future.result()
+
+    if system != new_system:
+        with ThreadPoolExecutor() as executor:
+            persons = executor.submit(person_thread, new_system)
+            hazards = executor.submit(hazard_thread, new_system)
+            impact_classes = executor.submit(hazard_thread, new_system)
+            failure_modes = executor.submit(failure_modes_thread, new_system)
+        system = new_system
+
     h.display_persons(persons)
-    hazards = h.extract_hazards(system, model="openai:gpt-5.2")
+    persons = modify_request_cycle(persons, "HARA", "Persons At Risk")
     h.display_hazards(hazards)
+    hazards = modify_request_cycle(hazards, "HARA", "Hazard Classes")
+
     harms_dict = h.harms(system, persons, hazards, model="openai:gpt-5.2")
     harms_summary_list = h.harms_summary(harms_dict, model="openai:gpt-5.2")
     h.display_harms(harms_summary_list)
-    impact_classes = h.extract_iclasses(system, model="openai:gpt-5.2")
+    harms_summary_list = modify_request_cycle(harms_summary_list, "HARA", "Harms Summary")
+
     impacts_dict = h.impacts(system, impact_classes, harms_summary_list, model="openai:gpt-5.2")
     h.display_impacts(impacts_dict)
-    failure_modes = h.identify_failure_modes(system, model="openai:gpt-5.2")
+    impact_dict = modify_request_cycle(impacts_dict, "HARA", "Impact Classes")
+
+    with ThreadPoolExecutor() as executor:
+        actuators_future = executor.submit(actuators_thread, system, impact_classes)
+
     h.display_failure_modes(failure_modes)
+    failure_modes = modify_request_cycle(failure_modes, "HARA", "Failure Modes")
+
+    h.display_actuators(actuators_future.result())
     actuators = h.define_actuators(system, impact_classes, model="openai:gpt-5.2")
-    h.display_actuators(actuators)
+    actuators = modify_request_cycle(actuators, "HARA", "Actuators")
 
-    changes = input("You have the option to modify the results of the HARA analysis. Enter S if you want to modify\n"
-                    "the system description, P if you want to modify the persons, H if you want to modify the\n"
-                    "hazards. If any of those three will be modified then the harms summary will be modified\n"
-                    "automatically. Altough you have the option to modify the impact classes by entering I,\n"
-                    "the failure modes by entering F and the actuators by entering A. Just type in the letters\n"
-                    "of all steps you would like to modify. e.g: I, A, M\n")
-
-    letters = [c.strip().lower() for c in changes.split(",")] #Fehlerbehandlung
     final_hara = {}
-    if "s" in letters:
-        system = feedback(system, "HARA", "System Under Analysis")
-        h.display_system(system)
-    if "p" in letters:
-        persons = feedback(persons, "HARA", "Persons At Risk")
-        h.display_persons(persons)
-    if "h" in letters:
-        hazards = feedback(hazards, "HARA", "Hazard Classes")
-        hazards = list(hazards.keys())
-        h.display_hazards(hazards)
-    if "s" in letters or "p" in letters or "h" in letters:
-        harms_dict = h.harms(system, persons, hazards, model="openai:gpt-5.2")
-        harms_summary_list = h.harms_summary(harms_dict, model="openai:gpt-5.2")
-        h.display_harms(harms_summary_list)
-    if "i" in letters:
-        impacts_dict = feedback(impacts_dict, "HARA", "Impact Classes")
-        h.display_impacts(impacts_dict)
-    if "f" in letters:
-        failure_modes = feedback(failure_modes, "HARA", "Failure Modes")
-        h.display_failure_modes(failure_modes)
-    if "a" in letters:
-        actuators = feedback(actuators, "HARA", "Actuators")
-        h.display_actuators(actuators)
-
     final_hara["System Under Analysis"] = system
     final_hara["Persons At Risk"] = persons
     final_hara["Hazards"] = hazards
@@ -134,3 +164,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
