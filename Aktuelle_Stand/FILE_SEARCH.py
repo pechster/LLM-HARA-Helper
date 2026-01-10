@@ -54,7 +54,7 @@ def complete_querys(user_querys: list[dict], analysis: json, hazards=False, mode
                                   - Return a JSON containing the hazards as keys and values for each hazard"""
     else:
         format_requirements = f"""JSON FORMAT:
-                                  - Keep the exact style of the analyis
+                                  - Keep the exact style of the JSON
                                   - Only return one valid JSON object"""
     messages = [
         {"role": "system",
