@@ -4,11 +4,13 @@ from dotenv import load_dotenv
 import json
 import os
 import ast
+from pip._internal.index import collector
 from typing import List, Dict, Any
 from HELPERS import *
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
+from concurrent.futures import ThreadPoolExecutor
 
 # added semantic embeddings - pip install sentence-transformers scikit-learn
 # from sentence_transformers import SentenceTransformer
@@ -272,15 +274,23 @@ def define_harm(system: json, person: str, hazard_class: str, model: str = "goog
 
     return response
 
+def define_harms_thread(system, p, h, model):
+    return define_harm(system, p, h, model)
 
 def harms(system: json, persons: List[Dict[str, str]], hazards: List[str], model: str = "google:gemini-1.5-pro"):
     harms = {}
-    for p in persons:
-        harm_caused = []
-        for h in hazards:
-            harm = define_harm(system, p, h, model=model)
-            harm_caused.append(harm)
-        harms[p['name']] = harm_caused
+    with ThreadPoolExecutor() as executor:
+        collector = {}
+        for p in persons:
+            collector[p["name"]] = []
+            for h in hazards:
+                harm_future = executor.submit(define_harms_thread, system, p, h, model=model)
+                collector[p["name"]].append(harm_future)
+        for pname, future_list in collector.items():
+            harms_caused = []
+            for future in future_list:
+                harms_caused.append(future.result())
+            harms[pname] = harms_caused
     return harms
 
 
@@ -541,15 +551,20 @@ def define_impact(system: json, impact_class: str, harms: str, model: str = "goo
 
     return response
 
+def define_impact_thread(system, ic, harm, model):
+    return define_impact(system, ic, harm, model)
 
 def impacts(system: json, impact_classes: List[str], harms_summary, model: str = "google:gemini-1.5-pro"):
     impacts = {}
-    for ic in impact_classes:
-        impact_list = []
-        for harm in harms_summary:
-            impact = define_impact(system, ic, harm, model=model)
-            impact_list.append(impact)
-        impacts[ic] = impact_list
+    with ThreadPoolExecutor() as executor:
+        collector = {}
+        for ic in impact_classes:
+            collector[ic] = []
+            for harm in harms_summary:
+                impact_future = executor.submit(define_impact_thread, system, ic, harm, model)
+                collector[ic].append(impact_future)
+        for ic, impact_futures in collector.items():
+            impacts[ic] = [impact_future.result() for impact_future in impact_futures]
     return impacts
 
 
@@ -1078,3 +1093,4 @@ if __name__ == "__main__":
     # failures = collect_failures(system, failure_modes, actuators, impacts_dict, model="openai:gpt-5.2")
     failures = {}
     display_hara_summary(system, persons, hazards, harms_summary_list, impacts_dict, failure_modes, actuators, failures)
+
